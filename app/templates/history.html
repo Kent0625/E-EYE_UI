@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="history-container">
+  <div class="card-header" style="margin-bottom: 16px;">
+    <h2 class="card-title">
+      <svg class="icon" style="color: var(--teal-600);"><use href="#icon-history"></use></svg>
+      <span data-i18n="history.title">History</span>
+    </h2>
+  </div>
+
+  <!-- Search Input -->
+  <div style="margin-bottom: 14px;">
+    <div style="position: relative;">
+      <input type="text" id="history-search" placeholder="Search by participant code…"
+             data-i18n="history.searchPlaceholder"
+             style="width: 100%; min-height: 48px; padding: 10px 14px 10px 40px; font-size: 15px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface);">
+      <svg class="icon" style="position: absolute; left: 12px; top: 14px; color: var(--text-muted);"><use href="#icon-scan"></use></svg>
+    </div>
+  </div>
+
+  <!-- Filter Pills -->
+  <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px;" role="group" aria-label="Filter sessions">
+    <button type="button" class="btn btn-secondary filter-btn active" data-filter="all" style="min-height: 48px; min-width: 48px; padding: 10px 16px; font-size: 14px;" data-i18n="history.filter.all">All</button>
+    <button type="button" class="btn btn-secondary filter-btn" data-filter="referral" style="min-height: 48px; min-width: 48px; padding: 10px 16px; font-size: 14px;" data-i18n="history.filter.referral">Referral</button>
+    <button type="button" class="btn btn-secondary filter-btn" data-filter="no_referral" style="min-height: 48px; min-width: 48px; padding: 10px 16px; font-size: 14px;" data-i18n="history.filter.noReferral">No referral</button>
+    <button type="button" class="btn btn-secondary filter-btn" data-filter="myopia" style="min-height: 48px; min-width: 48px; padding: 10px 16px; font-size: 14px;" data-i18n="history.filter.myopia">Myopia</button>
+    <button type="button" class="btn btn-secondary filter-btn" data-filter="hyperopia" style="min-height: 48px; min-width: 48px; padding: 10px 16px; font-size: 14px;" data-i18n="history.filter.hyperopia">Hyperopia</button>
+  </div>
+
+  <!-- Session List Container (Master-Detail Ready) -->
+  <div class="history-layout" style="display: grid; grid-template-columns: 1fr; gap: 16px;">
+    <div id="session-list" style="display: flex; flex-direction: column; gap: 12px;">
+      <!-- Populated via client-side fetch from /api/sessions -->
+      <div style="text-align: center; padding: 32px 0; color: var(--text-muted);">
+        Loading history…
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Deletion Confirmation Modal -->
+<div id="delete-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="delete-modal-title" style="font-size: 18px; font-weight: 700; color: var(--danger-text);" data-i18n="history.delete">Delete session</h3>
+    </div>
+    <div class="modal-body">
+      <p data-i18n="history.deleteConfirm">Delete this session? This cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="btn-cancel-delete" class="btn btn-secondary" data-i18n="history.cancel">Cancel</button>
+      <button type="button" id="btn-confirm-delete" class="btn btn-danger" data-i18n="history.delete">Delete session</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+  import { getJson, deleteJson } from "{{ url_for('static', filename='js/api.js') }}";
+  import { t } from "{{ url_for('static', filename='js/i18n.js') }}";
+
+  const listContainer = document.getElementById("session-list");
+  const searchInput = document.getElementById("history-search");
+  const filterBtns = document.querySelectorAll(".filter-btn");
+  let activeFilter = "all";
+  let sessionToDelete = null;
+
+  async function loadHistory() {
+    const q = searchInput.value.trim();
+    try {
+      const sessions = await getJson(`/api/sessions?q=${encodeURIComponent(q)}&filter=${activeFilter}`);
+      renderSessions(sessions);
+    } catch (err) {
+      listContainer.innerHTML = `<div style="text-align: center; color: var(--danger-text); padding: 24px;">Failed to load sessions.</div>`;
+    }
+  }
+
+  function renderSessions(sessions) {
+    if (!sessions || sessions.length === 0) {
+      listContainer.innerHTML = `
+        <div class="card" style="text-align: center; padding: 40px 20px;">
+          <p style="color: var(--text-muted); margin-bottom: 16px;" data-i18n="history.empty">${t("history.empty")}</p>
+          <a href="/screen/new" class="btn btn-primary" style="display: inline-flex;">Start screening</a>
+        </div>
+      `;
+      return;
+    }
+
+    listContainer.innerHTML = sessions.map(s => {
+      const isRefer = s.referral === true;
+      const badgeClass = isRefer ? "badge-warn" : (s.referral === false ? "badge-ok" : "badge-warn");
+      const badgeText = isRefer ? "REFERRAL" : (s.referral === false ? "NO REFERRAL" : "INCOMPLETE");
+      const iconId = isRefer ? "#icon-alert-triangle" : "#icon-check";
+      
+      const od = s.eyes?.OD;
+      const os = s.eyes?.OS;
+      const odText = od && od.se_D !== undefined ? `OD: ${od.se_D < 0 ? "−" : "+"}${Math.abs(od.se_D).toFixed(2)} D` : "OD: --";
+      const osText = os && os.se_D !== undefined ? `OS: ${os.se_D < 0 ? "−" : "+"}${Math.abs(os.se_D).toFixed(2)} D` : "OS: --";
+
+      return `
+        <div class="card" style="padding: 16px; margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <a href="/screen/${s.id}/result" style="text-decoration: none; color: inherit; flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-weight: 700; font-size: 16px; color: var(--text);" class="numeric">${s.participant_code}</span>
+              <span class="badge ${badgeClass}" style="font-size: 11px;">
+                <svg class="icon" style="width: 12px; height: 12px;"><use href="${iconId}"></use></svg>
+                ${badgeText}
+              </span>
+            </div>
+            <div style="font-size: 13px; color: var(--text-muted); display: flex; justify-content: space-between;" class="numeric">
+              <span>${s.created_at.substring(0, 16).replace("T", " ")}</span>
+              <span>${odText} &bull; ${osText}</span>
+            </div>
+          </a>
+          <button type="button" class="btn-delete-row" data-id="${s.id}" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 8px;" aria-label="Delete session">
+            <svg class="icon" style="width: 18px; height: 18px;"><use href="#icon-trash-2"></use></svg>
+          </button>
+        </div>
+      `;
+    }).join("");
+
+    document.querySelectorAll(".btn-delete-row").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        sessionToDelete = e.currentTarget.getAttribute("data-id");
+        document.getElementById("delete-modal").style.display = "flex";
+      });
+    });
+  }
+
+  searchInput.addEventListener("input", () => {
+    loadHistory();
+  });
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      filterBtns.forEach(b => b.classList.remove("active"));
+      e.currentTarget.classList.add("active");
+      activeFilter = e.currentTarget.getAttribute("data-filter");
+      loadHistory();
+    });
+  });
+
+  // Modal deletion handlers
+  const deleteModal = document.getElementById("delete-modal");
+  document.getElementById("btn-cancel-delete").addEventListener("click", () => {
+    deleteModal.style.display = "none";
+    sessionToDelete = null;
+  });
+
+  document.getElementById("btn-confirm-delete").addEventListener("click", async () => {
+    if (!sessionToDelete) return;
+    try {
+      await deleteJson(`/api/sessions/${sessionToDelete}`);
+      deleteModal.style.display = "none";
+      sessionToDelete = null;
+      loadHistory();
+    } catch (err) {
+      alert("Failed to delete session: " + err.message);
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", loadHistory);
+</script>
+{% endblock %}

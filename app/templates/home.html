@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="home-container">
+  <!-- Can't reach device banner (hidden by default, shown if /api/status fails) -->
+  <div id="offline-banner" class="offline-banner" style="display: none;" role="alert">
+    <h3 data-i18n="home.offline.title">
+      <svg class="icon"><use href="#icon-alert-triangle"></use></svg>
+      <span>Can't reach the device</span>
+    </h3>
+    <ol>
+      <li data-i18n="home.offline.step1">1. Connect your phone or laptop to the E-Eye Wi-Fi hotspot.</li>
+      <li data-i18n="home.offline.step2">2. Open 192.168.4.1 in your browser.</li>
+      <li data-i18n="home.offline.step3">3. Retry connection.</li>
+    </ol>
+    <button type="button" id="btn-retry-conn" class="btn btn-secondary" style="margin-top: 8px;" data-i18n="home.offline.retry">
+      <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
+      <span>Retry connection</span>
+    </button>
+  </div>
+
+  <!-- Device Status Card -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">
+        <svg class="icon" style="color: var(--teal-600);"><use href="#icon-cpu"></use></svg>
+        <span data-i18n="home.status.title">Device status</span>
+      </h2>
+      <button type="button" id="btn-refresh-status" class="btn btn-secondary" style="min-height: 48px; min-width: 48px; padding: 12px;" aria-label="Refresh status">
+        <svg class="icon" style="width: 20px; height: 20px;"><use href="#icon-refresh-cw"></use></svg>
+      </button>
+    </div>
+
+    <div class="status-grid" id="status-grid">
+      <!-- Camera -->
+      <div class="status-item">
+        <div class="status-label-group">
+          <svg class="icon"><use href="#icon-camera"></use></svg>
+          <span data-i18n="home.status.camera">Camera</span>
+        </div>
+        <span id="status-camera" class="badge badge-ok">
+          <svg class="icon" style="width: 14px; height: 14px;"><use href="#icon-check"></use></svg>
+          <span class="badge-text" data-i18n="home.status.ok">OK</span>
+        </span>
+      </div>
+
+      <!-- Distance Sensor (ToF) -->
+      <div class="status-item">
+        <div class="status-label-group">
+          <svg class="icon"><use href="#icon-ruler"></use></svg>
+          <span data-i18n="home.status.tof">Distance sensor</span>
+        </div>
+        <span id="status-tof" class="badge badge-ok">
+          <svg class="icon" style="width: 14px; height: 14px;"><use href="#icon-check"></use></svg>
+          <span class="badge-text" data-i18n="home.status.ok">OK</span>
+        </span>
+      </div>
+
+      <!-- IR LED -->
+      <div class="status-item">
+        <div class="status-label-group">
+          <svg class="icon"><use href="#icon-lightbulb"></use></svg>
+          <span data-i18n="home.status.led">IR LED</span>
+        </div>
+        <span id="status-led" class="badge badge-ok">
+          <svg class="icon" style="width: 14px; height: 14px;"><use href="#icon-check"></use></svg>
+          <span class="badge-text" data-i18n="home.status.ok">OK</span>
+        </span>
+      </div>
+
+      <!-- Inference Model -->
+      <div class="status-item">
+        <div class="status-label-group">
+          <svg class="icon"><use href="#icon-cpu"></use></svg>
+          <span data-i18n="home.status.model">Model</span>
+        </div>
+        <span id="status-model" class="badge badge-ok">
+          <svg class="icon" style="width: 14px; height: 14px;"><use href="#icon-check"></use></svg>
+          <span class="badge-text" data-i18n="home.status.loaded">Loaded</span>
+        </span>
+      </div>
+
+      <!-- Storage -->
+      <div class="status-item">
+        <div class="status-label-group">
+          <svg class="icon"><use href="#icon-hard-drive"></use></svg>
+          <span data-i18n="home.status.storage">Storage free</span>
+        </div>
+        <span id="status-storage" class="badge badge-ok">
+          <span class="numeric" id="val-storage">18.4</span> GB
+        </span>
+      </div>
+
+      <!-- Clock -->
+      <div class="status-item">
+        <div class="status-label-group">
+          <svg class="icon"><use href="#icon-clock"></use></svg>
+          <span data-i18n="home.status.clock">Device clock</span>
+        </div>
+        <span id="status-clock" class="badge badge-ok">
+          <span class="badge-text" data-i18n="home.status.clockSet">Set</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pre-session Check Card -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">
+        <svg class="icon" style="color: var(--teal-600);"><use href="#icon-shield"></use></svg>
+        <span data-i18n="home.precheck.title">Pre-session check</span>
+      </h2>
+    </div>
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;" data-i18n="home.precheck.desc">
+      5-second test capture to confirm optical crescent, distance sensor, and brightness.
+    </p>
+    <button type="button" id="btn-run-precheck" class="btn btn-secondary btn-block" data-i18n="home.precheck.btn">
+      <svg class="icon"><use href="#icon-camera"></use></svg>
+      <span>Run pre-session check</span>
+    </button>
+  </div>
+
+  <!-- Primary Action: Start Screening -->
+  <div style="margin-top: 24px;">
+    <a href="/screen/new" id="btn-start-screening" class="btn btn-primary btn-block" style="font-size: 18px; height: 52px;" data-i18n="home.start">
+      <svg class="icon" style="width: 22px; height: 22px;"><use href="#icon-arrow-right"></use></svg>
+      <span>Start screening</span>
+    </a>
+    <p id="start-disabled-reason" style="display: none; color: var(--danger-text); font-size: 13px; margin-top: 8px; text-align: center;">
+      Hardware check incomplete or error detected.
+    </p>
+  </div>
+</div>
+
+<!-- Pre-check Modal Dialog -->
+<div id="precheck-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="precheck-modal-title">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="precheck-modal-title" style="font-size: 18px; font-weight: 600;" data-i18n="home.precheck.title">Pre-session check</h3>
+      <button type="button" id="btn-close-precheck-x" class="btn-secondary" style="border: none; background: transparent; cursor: pointer; padding: 12px; min-height: 48px; min-width: 48px; display: inline-flex; align-items: center; justify-content: center;" aria-label="Close dialog">
+        <svg class="icon"><use href="#icon-x"></use></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div id="precheck-loading" style="text-align: center; padding: 24px 0;">
+        <svg class="icon" style="width: 32px; height: 32px; color: var(--teal-600); animation: spin 1s linear infinite;"><use href="#icon-refresh-cw"></use></svg>
+        <p style="margin-top: 12px; color: var(--text-muted); font-size: 14px;">Capturing 5-second test frame…</p>
+      </div>
+      <div id="precheck-results" style="display: none;">
+        <div style="text-align: center; margin-bottom: 16px;">
+          <img id="precheck-crescent-img" src="" alt="Test crescent frame" style="max-width: 240px; border-radius: 8px; border: 1px solid var(--border);">
+          <p style="font-size: 13px; font-weight: 600; margin-top: 8px;" data-i18n="home.precheck.crescentPrompt">Is the crescent visible in the frame below?</p>
+          <div style="display: flex; gap: 12px; justify-content: center; margin-top: 12px;">
+            <button type="button" id="btn-crescent-yes" class="btn btn-secondary" style="min-height: 48px; min-width: 48px; padding: 10px 16px; font-size: 14px;" data-i18n="home.precheck.confirmYes">Yes, crescent visible</button>
+            <button type="button" id="btn-crescent-no" class="btn btn-secondary" style="min-height: 48px; min-width: 48px; padding: 10px 16px; font-size: 14px;" data-i18n="home.precheck.confirmNo">No, not visible</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
+          <div class="status-item">
+            <span data-i18n="home.precheck.tof">Distance sensor plausible</span>
+            <span id="precheck-tof-badge" class="badge badge-ok"><svg class="icon" style="width: 12px; height: 12px;"><use href="#icon-check"></use></svg> Pass</span>
+          </div>
+          <div class="status-item">
+            <span data-i18n="home.precheck.brightness">Pupil brightness in range (128-200)</span>
+            <span id="precheck-brightness-badge" class="badge badge-ok"><svg class="icon" style="width: 12px; height: 12px;"><use href="#icon-check"></use></svg> Pass (154)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="btn-close-precheck" class="btn btn-primary" data-i18n="home.precheck.close">Done</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+  import { getJson, postJson } from "{{ url_for('static', filename='js/api.js') }}";
+  import { t, applyTranslations } from "{{ url_for('static', filename='js/i18n.js') }}";
+
+  const statusGrid = document.getElementById("status-grid");
+  const offlineBanner = document.getElementById("offline-banner");
+  const btnStart = document.getElementById("btn-start-screening");
+  const disabledReason = document.getElementById("start-disabled-reason");
+
+  async function updateStatus() {
+    try {
+      const res = await getJson("/api/status");
+      offlineBanner.style.display = "none";
+      
+      // Update badges
+      setBadge("status-camera", res.camera === "ok", res.camera === "ok" ? t("home.status.ok") : t("home.status.error"));
+      setBadge("status-tof", res.tof === "ok", res.tof === "ok" ? t("home.status.ok") : t("home.status.error"));
+      setBadge("status-led", res.led === "ok", res.led === "ok" ? t("home.status.ok") : t("home.status.error"));
+      setBadge("status-model", res.model === "loaded", res.model === "loaded" ? t("home.status.loaded") : t("home.status.error"));
+      
+      document.getElementById("val-storage").textContent = res.storage_free_gb;
+      setBadge("status-clock", res.clock_set, res.clock_set ? t("home.status.clockSet") : t("home.status.clockNotSet"), !res.clock_set);
+
+      const allOk = res.camera === "ok" && res.tof === "ok" && res.model === "loaded";
+      if (!allOk) {
+        btnStart.classList.add("btn-disabled");
+        btnStart.setAttribute("aria-disabled", "true");
+        btnStart.style.pointerEvents = "none";
+        btnStart.style.opacity = "0.5";
+        disabledReason.style.display = "block";
+      } else {
+        btnStart.classList.remove("btn-disabled");
+        btnStart.removeAttribute("aria-disabled");
+        btnStart.style.pointerEvents = "auto";
+        btnStart.style.opacity = "1";
+        disabledReason.style.display = "none";
+      }
+    } catch (e) {
+      offlineBanner.style.display = "flex";
+      btnStart.style.pointerEvents = "none";
+      btnStart.style.opacity = "0.5";
+    }
+  }
+
+  function setBadge(id, isOk, text, isWarn = false) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = "badge " + (isOk ? "badge-ok" : (isWarn ? "badge-warn" : "badge-error"));
+    const iconId = isOk ? "#icon-check" : (isWarn ? "#icon-alert-triangle" : "#icon-alert-circle");
+    el.innerHTML = `<svg class="icon" style="width: 14px; height: 14px;"><use href="${iconId}"></use></svg><span class="badge-text">${text}</span>`;
+  }
+
+  document.getElementById("btn-refresh-status")?.addEventListener("click", updateStatus);
+  document.getElementById("btn-retry-conn")?.addEventListener("click", updateStatus);
+
+  // Pre-session check modal handlers
+  const precheckModal = document.getElementById("precheck-modal");
+  const btnRunPrecheck = document.getElementById("btn-run-precheck");
+  const precheckLoading = document.getElementById("precheck-loading");
+  const precheckResults = document.getElementById("precheck-results");
+  const precheckImg = document.getElementById("precheck-crescent-img");
+
+  btnRunPrecheck?.addEventListener("click", async () => {
+    precheckModal.style.display = "flex";
+    precheckLoading.style.display = "block";
+    precheckResults.style.display = "none";
+    
+    try {
+      const res = await postJson("/api/precheck");
+      precheckImg.src = res.crescent_frame_url;
+      precheckLoading.style.display = "none";
+      precheckResults.style.display = "block";
+    } catch (err) {
+      precheckLoading.innerHTML = `<p style="color: var(--danger-text);">Pre-check failed. Could not communicate with device.</p>`;
+    }
+  });
+
+  document.getElementById("btn-close-precheck")?.addEventListener("click", () => {
+    precheckModal.style.display = "none";
+  });
+  document.getElementById("btn-close-precheck-x")?.addEventListener("click", () => {
+    precheckModal.style.display = "none";
+  });
+
+  document.getElementById("btn-crescent-yes")?.addEventListener("click", (e) => {
+    e.target.className = "btn btn-primary";
+    document.getElementById("btn-crescent-no").className = "btn btn-secondary";
+  });
+  document.getElementById("btn-crescent-no")?.addEventListener("click", (e) => {
+    e.target.className = "btn btn-danger";
+    document.getElementById("btn-crescent-yes").className = "btn btn-secondary";
+  });
+
+  document.addEventListener("DOMContentLoaded", updateStatus);
+</script>
+{% endblock %}

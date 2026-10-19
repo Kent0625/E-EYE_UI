@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block body_class %}flow-screen{% endblock %}
+
+{% block content %}
+<div class="new-screening-container" style="max-width: 600px; margin: 0 auto;">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">
+        <svg class="icon" style="color: var(--teal-600);"><use href="#icon-scan"></use></svg>
+        <span data-i18n="flow.new.title">New Screening</span>
+      </h2>
+    </div>
+
+    <form id="form-new-screening">
+      <!-- Participant Code -->
+      <div style="margin-bottom: 20px;">
+        <label for="input-code" style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px;" data-i18n="flow.participantCode">
+          Participant code
+        </label>
+        <input type="text" id="input-code" name="participant_code" required
+               class="numeric"
+               style="width: 100%; min-height: 48px; padding: 10px 14px; font-size: 16px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg);"
+               value="EE-261019-001">
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" data-i18n="flow.code.note">
+          Do not enter names.
+        </p>
+      </div>
+
+      <!-- Site / Location (Optional) -->
+      <div style="margin-bottom: 24px;">
+        <label for="input-site" style="display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px;" data-i18n="flow.site">
+          Screening site / location (optional)
+        </label>
+        <input type="text" id="input-site" name="site" placeholder="e.g. RHU Sumilao"
+               style="width: 100%; min-height: 48px; padding: 10px 14px; font-size: 16px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface);">
+      </div>
+
+      <!-- Consent Verification (Mandatory) -->
+      <div style="background-color: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-control); padding: 16px; margin-bottom: 24px;">
+        <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 12px;" data-i18n="flow.consent.title">Participant consent</h3>
+        
+        <label style="display: flex; align-items: center; gap: 12px; min-height: 48px; margin-bottom: 8px; cursor: pointer;">
+          <input type="checkbox" id="chk-age" required style="width: 22px; height: 22px; accent-color: var(--teal-600);">
+          <span style="font-size: 15px;" data-i18n="flow.consent.age">Participant is 18 or older.</span>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer;">
+          <input type="checkbox" id="chk-consent" required style="width: 22px; height: 22px; accent-color: var(--teal-600);">
+          <span style="font-size: 15px;" data-i18n="flow.consent.signed">Written consent is signed and on file.</span>
+        </label>
+      </div>
+
+      <div class="sticky-action-bar">
+        <button type="submit" id="btn-continue" class="btn btn-primary btn-block" disabled style="font-size: 18px;" data-i18n="flow.continue">
+          Continue
+        </button>
+        <p id="continue-disabled-reason" class="action-disabled-reason">
+          Check both consent boxes to continue.
+        </p>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+  import { postJson } from "{{ url_for('static', filename='js/api.js') }}";
+
+  const form = document.getElementById("form-new-screening");
+  const chkAge = document.getElementById("chk-age");
+  const chkConsent = document.getElementById("chk-consent");
+  const btnContinue = document.getElementById("btn-continue");
+  const reason = document.getElementById("continue-disabled-reason");
+
+  function validate() {
+    const valid = chkAge.checked && chkConsent.checked;
+    btnContinue.disabled = !valid;
+    reason.style.display = valid ? "none" : "block";
+  }
+
+  chkAge.addEventListener("change", validate);
+  chkConsent.addEventListener("change", validate);
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!chkAge.checked || !chkConsent.checked) return;
+
+    const payload = {
+      participant_code: document.getElementById("input-code").value.trim(),
+      site: document.getElementById("input-site").value.trim(),
+      consent_age: true,
+      consent_signed: true,
+      client_time: new Date().toISOString()
+    };
+
+    try {
+      const res = await postJson("/api/sessions", payload);
+      window.location.href = `/screen/${res.id}/OD`;
+    } catch (err) {
+      alert("Failed to initialize session: " + err.message);
+    }
+  });
+</script>
+{% endblock %}

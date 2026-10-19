@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block body_class %}flow-screen{% endblock %}
+
+{% block content %}
+<div class="record-container">
+  <!-- Meta bar: Eye indicator & Participant code -->
+  <div class="align-meta-bar">
+    <h2 class="align-eye-title">
+      {% if eye == 'OD' %}
+        <span data-i18n="align.od">Right eye (OD)</span>
+      {% else %}
+        <span data-i18n="align.os">Left eye (OS)</span>
+      {% endif %}
+    </h2>
+    <span class="badge badge-ok numeric">{{ session.participant_code if session else 'EE-261019-001' }}</span>
+  </div>
+
+  <div class="align-grid">
+    <!-- Left Column (Desktop) / Top (Mobile): Camera Preview Card -->
+    <div class="card align-preview-card">
+      <div id="preview-wrapper">
+        <img id="camera-stream" src="/api/preview.mjpg" alt="Live camera preview">
+        
+        <!-- Stream Fallback Overlay if unavailable -->
+        <div id="stream-fallback" style="display: none;">
+          <svg class="icon" style="width: 36px; height: 36px; color: var(--warn-border); margin-bottom: 8px;"><use href="#icon-alert-triangle"></use></svg>
+          <p class="fallback-title">Preview unavailable</p>
+          <p class="fallback-desc">Unable to connect to camera stream.</p>
+          <button type="button" id="btn-retry-stream" class="btn btn-secondary" style="min-height: 48px;">
+            <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
+            <span>Retry preview</span>
+          </button>
+        </div>
+
+        <!-- Recording Countdown Overlay -->
+        <div id="recording-overlay" style="display: none;">
+          <div class="countdown-circle numeric" id="countdown-val">5</div>
+          <p class="countdown-label" data-i18n="align.hold">Hold still</p>
+        </div>
+      </div>
+      <p class="fixation-hint" data-i18n="align.fixation">
+        Ask the participant to look at the target.
+      </p>
+    </div>
+
+    <!-- Right Column (Desktop) / Bottom (Mobile): Distance Telemetry & Record Action -->
+    <div class="align-controls-column">
+      <div class="card align-meter-card">
+        <div class="card-header" style="margin-bottom: 6px;">
+          <h3 class="card-title">
+            <svg class="icon"><use href="#icon-ruler"></use></svg>
+            <span data-i18n="home.status.tof">Distance sensor</span>
+          </h3>
+          <span id="distance-badge" class="badge badge-warn">
+            <svg class="icon" style="width: 14px; height: 14px;"><use href="#icon-alert-triangle"></use></svg>
+            <span id="distance-state-text" data-i18n="align.tooFar">Move closer</span>
+          </span>
+        </div>
+
+        <!-- Distance Readout & Gauge -->
+        <div class="distance-gauge-section">
+          <div class="distance-val-display numeric">
+            <span id="distance-val">--</span> <span class="distance-unit">cm</span>
+          </div>
+
+          <!-- 5 to 20 cm Graphical Bar with 10-15 cm Target Zone -->
+          <div class="distance-bar-container">
+            <div class="distance-bar-track">
+              <!-- Target Band 10cm to 15cm (33.3% to 66.6% of 5-20cm range) -->
+              <div class="distance-target-band" title="Optimal Range (10.0-15.0 cm)"></div>
+            </div>
+            <!-- Gauge Pointer Marker -->
+            <div id="gauge-pointer" class="gauge-pointer"></div>
+            
+            <div class="distance-scale numeric">
+              <span>5 cm</span>
+              <span class="distance-target-label">10–15 cm (Target)</span>
+              <span>20 cm</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stability Progress Indicator -->
+        <div id="stability-wrapper" class="stability-wrapper">
+          <span id="stability-text">Hold steady in the 10–15 cm range for 1 second</span>
+        </div>
+
+        <!-- Warning banner if distance changed during recording or capture error -->
+        <div id="recording-alert" class="recording-alert" style="display: none;" role="alert">
+          <svg class="icon"><use href="#icon-alert-triangle"></use></svg>
+          <span id="recording-alert-text"></span>
+        </div>
+      </div>
+
+      <!-- Action bar: Sticky on mobile above nav, static below meter on desktop -->
+      <div class="sticky-action-bar" id="align-action-bar">
+        <button type="button" id="btn-record" class="btn btn-primary btn-block" disabled data-i18n="align.record">
+          <svg class="icon"><use href="#icon-camera"></use></svg>
+          <span>Record 5 seconds</span>
+        </button>
+        <p id="record-disabled-reason" class="action-disabled-reason">
+          Align within 10.0 to 15.0 cm to enable recording.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+  import { postJson } from "{{ url_for('static', filename='js/api.js') }}";
+  import { t } from "{{ url_for('static', filename='js/i18n.js') }}";
+
+  const sessionId = "{{ session.id if session else 's_mock_refer' }}";
+  const currentEye = "{{ eye }}";
+
+  const distVal = document.getElementById("distance-val");
+  const distBadge = document.getElementById("distance-badge");
+  const gaugePointer = document.getElementById("gauge-pointer");
+  const btnRecord = document.getElementById("btn-record");
+  const recordReason = document.getElementById("record-disabled-reason");
+  const overlay = document.getElementById("recording-overlay");
+  const countdownVal = document.getElementById("countdown-val");
+  const stabilityText = document.getElementById("stability-text");
+  const cameraStream = document.getElementById("camera-stream");
+  const streamFallback = document.getElementById("stream-fallback");
+  const btnRetryStream = document.getElementById("btn-retry-stream");
+  const alertBox = document.getElementById("recording-alert");
+  const alertText = document.getElementById("recording-alert-text");
+
+  cameraStream?.addEventListener("error", () => {
+    if (streamFallback) streamFallback.style.display = "flex";
+  });
+
+  btnRetryStream?.addEventListener("click", () => {
+    if (streamFallback) streamFallback.style.display = "none";
+    if (cameraStream) cameraStream.src = `/api/preview.mjpg?t=${Date.now()}`;
+  });
+
+  let inRangeStartTime = null;
+  let isRecording = false;
+  let distEvtSource = null;
+
+  function initDistanceStream() {
+    if (distEvtSource) {
+      try { distEvtSource.close(); } catch (_) {}
+    }
+    distEvtSource = new EventSource("/api/distance");
+    window.evtSource = distEvtSource;
+    distEvtSource.onmessage = (event) => {
+      if (isRecording) return;
+      try {
+        const data = JSON.parse(event.data);
+        renderDistance(data);
+      } catch (e) {
+        console.error("Distance SSE parse error:", e);
+      }
+    };
+  }
+
+  function renderDistance(data) {
+    if (!data.valid || data.cm <= 0) {
+      distVal.textContent = "--";
+      distBadge.className = "badge badge-warn";
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${t("align.noReading")}</span>`;
+      inRangeStartTime = null;
+      btnRecord.disabled = true;
+      recordReason.textContent = t("align.noReading");
+      stabilityText.textContent = t("align.noReading");
+      return;
+    }
+
+    const cm = data.cm;
+    distVal.textContent = cm.toFixed(1);
+
+    // Map cm (5 to 20) to percentage 0% to 100%
+    const clamped = Math.max(5, Math.min(20, cm));
+    const pct = ((clamped - 5) / 15) * 100;
+    gaugePointer.style.left = `${pct}%`;
+
+    if (cm < 10.0) {
+      distBadge.className = "badge badge-warn";
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${t("align.tooClose")}</span>`;
+      inRangeStartTime = null;
+      btnRecord.disabled = true;
+      recordReason.textContent = t("align.tooClose");
+      stabilityText.textContent = "Move back to 10–15 cm";
+    } else if (cm > 15.0) {
+      distBadge.className = "badge badge-warn";
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${t("align.tooFar")}</span>`;
+      inRangeStartTime = null;
+      btnRecord.disabled = true;
+      recordReason.textContent = t("align.tooFar");
+      stabilityText.textContent = "Move closer to 10–15 cm";
+    } else {
+      // In range: 10.0 to 15.0 cm
+      distBadge.className = "badge badge-ok";
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-check"></use></svg><span>${t("align.ok")}</span>`;
+      
+      const now = Date.now();
+      if (!inRangeStartTime) {
+        inRangeStartTime = now;
+        btnRecord.disabled = true;
+        stabilityText.textContent = "Holding steady…";
+      } else if (now - inRangeStartTime >= 1000) {
+        // 1 continuous second achieved
+        btnRecord.disabled = false;
+        recordReason.textContent = "Ready to record";
+        stabilityText.textContent = "Position stable. Press Record.";
+      }
+    }
+  }
+
+  // Expose helpers for test automation
+  window.renderDistance = renderDistance;
+  window.initDistanceStream = initDistanceStream;
+
+  // Initialize live distance stream
+  initDistanceStream();
+
+  btnRecord.addEventListener("click", async () => {
+    if (isRecording || btnRecord.disabled) return;
+    isRecording = true;
+    btnRecord.disabled = true;
+    overlay.style.display = "flex";
+    countdownVal.textContent = "5";
+    alertBox.style.display = "none";
+
+    // Pause distance polling during capture
+    if (distEvtSource) {
+      distEvtSource.close();
+      distEvtSource = null;
+    }
+
+    try {
+      await postJson(`/api/sessions/${sessionId}/record`, { eye: currentEye });
+      
+      // Determine simulation mode from URL query parameters (e.g. ?simulate=drift or ?simulate=error)
+      const urlParams = new URLSearchParams(window.location.search);
+      const simMode = urlParams.get("simulate") || "normal";
+      const fastMode = urlParams.get("fast") || "0";
+      const sseUrl = `/api/sessions/${sessionId}/record/stream?eye=${currentEye}&simulate=${simMode}&fast=${fastMode}`;
+
+      const recordStream = new EventSource(sseUrl);
+      window.recordStream = recordStream;
+
+      recordStream.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.event === "tick") {
+            countdownVal.textContent = msg.seconds_left;
+          } else if (msg.event === "distance_drift") {
+            // Backend detected distance drift during capture
+          } else if (msg.event === "recording_complete") {
+            recordStream.close();
+            window.recordStream = null;
+
+            if (msg.success) {
+              // Successfully captured 5s frames -> proceed to processing
+              window.location.href = `/screen/${sessionId}/processing?eye=${currentEye}`;
+            } else {
+              // Distance changed or capture error -> show retake notice
+              isRecording = false;
+              overlay.style.display = "none";
+              alertText.textContent = msg.message || "Distance changed during recording. Retake.";
+              alertBox.style.display = "flex";
+              stabilityText.textContent = "Realign in 10–15 cm range.";
+              inRangeStartTime = null;
+              btnRecord.disabled = true;
+              initDistanceStream();
+            }
+          }
+        } catch (err) {
+          console.error("Record SSE parse error:", err);
+        }
+      };
+
+      recordStream.onerror = () => {
+        recordStream.close();
+        window.recordStream = null;
+        isRecording = false;
+        overlay.style.display = "none";
+        alertText.textContent = "Recording stream disconnected. Please retry.";
+        alertBox.style.display = "flex";
+        initDistanceStream();
+      };
+
+    } catch (err) {
+      isRecording = false;
+      overlay.style.display = "none";
+      alertText.textContent = "Failed to start recording: " + err.message;
+      alertBox.style.display = "flex";
+      initDistanceStream();
+    }
+  });
+</script>
+{% endblock %}

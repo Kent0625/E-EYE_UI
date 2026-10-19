@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+  <title>{% if mock_mode %}[MOCK] {% endif %}E-Eye - Refractive Error Screening</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="preload" href="{{ url_for('static', filename='fonts/inter-latin-variable.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ url_for('static', filename='icons/sprite.svg') }}" as="image" type="image/svg+xml">
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <!-- Embedded Lucide SVG Sprite for reliable offline rendering -->
+  <div style="display: none;">
+    {% include "sprite_inline.html" ignore missing %}
+  </div>
+
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo" aria-hidden="true">
+          <svg class="icon"><use href="#icon-eye"></use></svg>
+        </div>
+        <div>
+          <span class="brand-title">E-Eye</span>
+          {% if mock_mode %}
+            <span class="brand-tag" data-i18n="app.mock">MOCK DATA</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language selection">
+          <button type="button" class="lang-btn {% if current_lang == 'en' %}active{% endif %}" data-lang="en" aria-pressed="{% if current_lang == 'en' %}true{% else %}false{% endif %}">EN</button>
+          <button type="button" class="lang-btn {% if current_lang == 'fil' %}active{% endif %}" data-lang="fil" aria-pressed="{% if current_lang == 'fil' %}true{% else %}false{% endif %}">FIL</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-wrapper">
+      <!-- Side Rail for Tablet/Desktop (>= 640px) -->
+      <nav class="nav-rail" aria-label="Primary Navigation">
+        <a href="/" class="nav-rail-item {% if active_nav == 'home' %}active{% endif %}" aria-current="{% if active_nav == 'home' %}page{% else %}false{% endif %}">
+          <svg class="icon"><use href="#icon-home"></use></svg>
+          <span data-i18n="nav.home">{{ t('nav.home') }}</span>
+        </a>
+        <a href="/screen/new" class="nav-rail-item {% if active_nav == 'screen' %}active{% endif %}" aria-current="{% if active_nav == 'screen' %}page{% else %}false{% endif %}">
+          <svg class="icon"><use href="#icon-scan"></use></svg>
+          <span data-i18n="nav.screen">{{ t('nav.screen') }}</span>
+        </a>
+        <a href="/history" class="nav-rail-item {% if active_nav == 'history' %}active{% endif %}" aria-current="{% if active_nav == 'history' %}page{% else %}false{% endif %}">
+          <svg class="icon"><use href="#icon-history"></use></svg>
+          <span data-i18n="nav.history">{{ t('nav.history') }}</span>
+        </a>
+        <a href="/settings" class="nav-rail-item {% if active_nav == 'settings' %}active{% endif %}" aria-current="{% if active_nav == 'settings' %}page{% else %}false{% endif %}">
+          <svg class="icon"><use href="#icon-settings"></use></svg>
+          <span data-i18n="nav.settings">{{ t('nav.settings') }}</span>
+        </a>
+      </nav>
+
+      <!-- Main Content -->
+      <main class="page-content" id="main-content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+
+    <!-- Bottom Nav for Mobile (< 640px) -->
+    <nav class="bottom-nav" aria-label="Mobile Navigation">
+      <a href="/" class="nav-item {% if active_nav == 'home' %}active{% endif %}" aria-current="{% if active_nav == 'home' %}page{% else %}false{% endif %}">
+        <svg class="icon"><use href="#icon-home"></use></svg>
+        <span data-i18n="nav.home">{{ t('nav.home') }}</span>
+      </a>
+      <a href="/screen/new" class="nav-item {% if active_nav == 'screen' %}active{% endif %}" aria-current="{% if active_nav == 'screen' %}page{% else %}false{% endif %}">
+        <svg class="icon"><use href="#icon-scan"></use></svg>
+        <span data-i18n="nav.screen">{{ t('nav.screen') }}</span>
+      </a>
+      <a href="/history" class="nav-item {% if active_nav == 'history' %}active{% endif %}" aria-current="{% if active_nav == 'history' %}page{% else %}false{% endif %}">
+        <svg class="icon"><use href="#icon-history"></use></svg>
+        <span data-i18n="nav.history">{{ t('nav.history') }}</span>
+      </a>
+      <a href="/settings" class="nav-item {% if active_nav == 'settings' %}active{% endif %}" aria-current="{% if active_nav == 'settings' %}page{% else %}false{% endif %}">
+        <svg class="icon"><use href="#icon-settings"></use></svg>
+        <span data-i18n="nav.settings">{{ t('nav.settings') }}</span>
+      </a>
+    </nav>
+  </div>
+
+  <script type="module" src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

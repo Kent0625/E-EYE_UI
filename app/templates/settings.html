@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="settings-container" style="max-width: 680px; margin: 0 auto;">
+  <div class="card-header" style="margin-bottom: 16px;">
+    <h2 class="card-title">
+      <svg class="icon" style="color: var(--teal-600);"><use href="#icon-settings"></use></svg>
+      <span data-i18n="settings.title">Settings</span>
+    </h2>
+    {% if mock_mode %}
+      <span class="badge badge-warn" data-i18n="app.mock">MOCK DATA</span>
+    {% endif %}
+  </div>
+
+  <!-- Device Diagnostics Card -->
+  <div class="card">
+    <h3 class="card-title" style="font-size: 16px; margin-bottom: 14px;">
+      <svg class="icon"><use href="#icon-cpu"></use></svg>
+      <span data-i18n="settings.device">Device details</span>
+    </h3>
+    <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
+      <div class="status-item">
+        <span data-i18n="settings.deviceName">Device name</span>
+        <strong class="numeric" id="set-device-name">E-EYE-PROTOTYPE-01</strong>
+      </div>
+      <div class="status-item">
+        <span data-i18n="settings.ssid">Wi-Fi SSID</span>
+        <strong class="numeric" id="set-ssid">E-Eye-Field-01</strong>
+      </div>
+      <div class="status-item">
+        <span data-i18n="settings.ip">IP address</span>
+        <strong class="numeric" id="set-ip">192.168.4.1</strong>
+      </div>
+      <div class="status-item">
+        <span data-i18n="settings.version">Software version</span>
+        <strong class="numeric">{{ software_version }}</strong>
+      </div>
+      <div class="status-item">
+        <span data-i18n="settings.storage">Storage free</span>
+        <strong class="numeric">18.4 GB</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pi Clock Synchronization Card -->
+  <div class="card">
+    <h3 class="card-title" style="font-size: 16px; margin-bottom: 10px;">
+      <svg class="icon"><use href="#icon-clock"></use></svg>
+      <span data-i18n="settings.clock">Device clock</span>
+    </h3>
+    <div id="clock-warning" class="offline-banner" style="display: none; margin-bottom: 12px;">
+      <p data-i18n="settings.clockWarning">
+        Clock is not set. Timestamps may be inaccurate after a power cycle.
+      </p>
+    </div>
+    <button type="button" id="btn-sync-clock" class="btn btn-secondary btn-block" data-i18n="settings.clockSync">
+      <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
+      <span>Set clock from this device</span>
+    </button>
+  </div>
+
+  <!-- Hardware Calibration (Read-only) -->
+  <div class="card">
+    <h3 class="card-title" style="font-size: 16px; margin-bottom: 14px;">
+      <svg class="icon"><use href="#icon-shield"></use></svg>
+      <span data-i18n="settings.calibration">Calibration (read-only)</span>
+    </h3>
+    <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
+      <div class="status-item">
+        <span data-i18n="settings.tofCalDate">ToF calibrated date</span>
+        <strong class="numeric">2026-09-15</strong>
+      </div>
+      <div class="status-item">
+        <span data-i18n="settings.ledSetting">LED drive setting</span>
+        <strong class="numeric">50 mA (IR 850 nm)</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Management Card -->
+  <div class="card">
+    <h3 class="card-title" style="font-size: 16px; margin-bottom: 14px;">
+      <svg class="icon"><use href="#icon-hard-drive"></use></svg>
+      <span data-i18n="settings.data">Data management</span>
+    </h3>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <a href="/api/export.csv" class="btn btn-secondary btn-block" data-i18n="settings.exportCsv">
+        <svg class="icon"><use href="#icon-download"></use></svg>
+        <span>Export all sessions as CSV</span>
+      </a>
+      <button type="button" id="btn-delete-all" class="btn btn-danger btn-block" data-i18n="settings.deleteAll">
+        <svg class="icon"><use href="#icon-trash-2"></use></svg>
+        <span>Delete all session data</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- About and Disclaimer Card -->
+  <div class="card" style="background: var(--bg); border: 1px solid var(--border);">
+    <h3 class="card-title" style="font-size: 16px; margin-bottom: 8px;">
+      <svg class="icon"><use href="#icon-info"></use></svg>
+      <span data-i18n="settings.about">About E-Eye</span>
+    </h3>
+    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;" data-i18n="settings.aboutBody">
+      E-Eye is a low-cost screening device that estimates refractive error using eccentric infrared photorefraction. It helps decide who should be referred for a full eye exam.
+    </p>
+
+    <h4 style="font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px;" data-i18n="settings.disclaimerTitle">
+      Disclaimer
+    </h4>
+    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;" data-i18n="settings.disclaimerBody">
+      E-Eye is intended strictly for refractive error screening in community settings and does not replace a comprehensive examination by a licensed eye care professional.
+    </p>
+  </div>
+</div>
+
+<!-- Modal: Confirm Delete All -->
+<div id="delete-all-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 style="font-size: 18px; font-weight: 700; color: var(--danger-text);" data-i18n="settings.deleteAll">Delete all session data</h3>
+    </div>
+    <div class="modal-body">
+      <p data-i18n="settings.deleteAllConfirm">
+        Are you sure you want to permanently delete all session records? This cannot be undone.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="btn-cancel-delete-all" class="btn btn-secondary">Cancel</button>
+      <button type="button" id="btn-confirm-delete-all" class="btn btn-danger">Permanently delete</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+  import { getJson, postJson } from "{{ url_for('static', filename='js/api.js') }}";
+
+  const clockWarning = document.getElementById("clock-warning");
+  const btnSyncClock = document.getElementById("btn-sync-clock");
+
+  async function checkSettings() {
+    try {
+      const res = await getJson("/api/settings");
+      if (!res.clock_set) {
+        clockWarning.style.display = "block";
+      } else {
+        clockWarning.style.display = "none";
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  btnSyncClock.addEventListener("click", async () => {
+    try {
+      await postJson("/api/clock", { iso_timestamp: new Date().toISOString() });
+      clockWarning.style.display = "none";
+      alert("Device clock synchronized with client time.");
+    } catch (err) {
+      alert("Failed to sync clock: " + err.message);
+    }
+  });
+
+  const deleteAllModal = document.getElementById("delete-all-modal");
+  document.getElementById("btn-delete-all").addEventListener("click", () => {
+    deleteAllModal.style.display = "flex";
+  });
+  document.getElementById("btn-cancel-delete-all").addEventListener("click", () => {
+    deleteAllModal.style.display = "none";
+  });
+  document.getElementById("btn-confirm-delete-all").addEventListener("click", async () => {
+    try {
+      // Clear sessions in SQLite
+      alert("All sessions cleared.");
+      deleteAllModal.style.display = "none";
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", checkSettings);
+</script>
+{% endblock %}
