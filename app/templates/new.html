@@ -21,7 +21,7 @@
         <input type="text" id="input-code" name="participant_code" required
                class="numeric"
                style="width: 100%; min-height: 48px; padding: 10px 14px; font-size: 16px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg);"
-               value="EE-261019-001">
+               value="{{ suggested_code or '' }}">
         <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" data-i18n="flow.code.note">
           Do not enter names.
         </p>
@@ -33,6 +33,7 @@
           Screening site / location (optional)
         </label>
         <input type="text" id="input-site" name="site" placeholder="e.g. RHU Sumilao"
+               value="{{ default_site or '' }}"
                style="width: 100%; min-height: 48px; padding: 10px 14px; font-size: 16px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface);">
       </div>
 

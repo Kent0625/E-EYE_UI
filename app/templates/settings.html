@@ -1,185 +1,190 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="settings-container" style="max-width: 680px; margin: 0 auto;">
-  <div class="card-header" style="margin-bottom: 16px;">
+<div class="settings-container">
+  <div class="settings-header">
     <h2 class="card-title">
-      <svg class="icon" style="color: var(--teal-600);"><use href="#icon-settings"></use></svg>
-      <span data-i18n="settings.title">Settings</span>
+      <svg class="icon icon-teal"><use href="#icon-settings"></use></svg>
+      <span data-i18n="settings.title">{{ t('settings.title') }}</span>
     </h2>
     {% if mock_mode %}
       <span class="badge badge-warn" data-i18n="app.mock">MOCK DATA</span>
     {% endif %}
   </div>
 
+  <!-- Screening Site / Location -->
+  <div class="card">
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-map-pin"></use></svg>
+      <span data-i18n="settings.siteName">{{ t('settings.siteName') }}</span>
+    </h3>
+    <div class="settings-field-group">
+      <label for="setting-site-name" class="label" data-i18n="settings.siteName">{{ t('settings.siteName') }}</label>
+      <div class="settings-save-row">
+        <input type="text" id="setting-site-name" class="settings-input"
+               value="{{ settings_data.site_name or '' }}"
+               placeholder="{{ t('settings.sitePlaceholder') }}"
+               data-i18n="settings.sitePlaceholder">
+        <button type="button" id="btn-save-site" class="btn btn-secondary" data-i18n="settings.saveSite">
+          {{ t('settings.saveSite') }}
+        </button>
+      </div>
+      <div id="site-save-feedback" class="settings-feedback hidden" data-i18n="settings.siteSaved">
+        {{ t('settings.siteSaved') }}
+      </div>
+    </div>
+  </div>
+
   <!-- Device Diagnostics Card -->
   <div class="card">
-    <h3 class="card-title" style="font-size: 16px; margin-bottom: 14px;">
-      <svg class="icon"><use href="#icon-cpu"></use></svg>
-      <span data-i18n="settings.device">Device details</span>
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-cpu"></use></svg>
+      <span data-i18n="settings.device">{{ t('settings.device') }}</span>
     </h3>
-    <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
+    <div class="status-list">
       <div class="status-item">
-        <span data-i18n="settings.deviceName">Device name</span>
-        <strong class="numeric" id="set-device-name">E-EYE-PROTOTYPE-01</strong>
+        <span data-i18n="settings.deviceName">{{ t('settings.deviceName') }}</span>
+        <strong class="numeric" id="set-device-name">{{ settings_data.device_name }}</strong>
       </div>
       <div class="status-item">
-        <span data-i18n="settings.ssid">Wi-Fi SSID</span>
-        <strong class="numeric" id="set-ssid">E-Eye-Field-01</strong>
+        <span data-i18n="settings.ssid">{{ t('settings.ssid') }}</span>
+        <strong class="numeric" id="set-ssid">{{ settings_data.ssid }}</strong>
       </div>
       <div class="status-item">
-        <span data-i18n="settings.ip">IP address</span>
-        <strong class="numeric" id="set-ip">192.168.4.1</strong>
+        <span data-i18n="settings.ip">{{ t('settings.ip') }}</span>
+        <strong class="numeric" id="set-ip">{{ settings_data.ip }}</strong>
       </div>
       <div class="status-item">
-        <span data-i18n="settings.version">Software version</span>
-        <strong class="numeric">{{ software_version }}</strong>
+        <div>
+          <span data-i18n="settings.version">{{ t('settings.version') }}</span>
+          <div class="field-disabled-hint" data-i18n="settings.disabledVersionHint">
+            {{ t('settings.disabledVersionHint') }}
+          </div>
+        </div>
+        <strong class="numeric">{{ settings_data.software_version }}</strong>
       </div>
       <div class="status-item">
-        <span data-i18n="settings.storage">Storage free</span>
-        <strong class="numeric">18.4 GB</strong>
+        <span data-i18n="settings.storage">{{ t('settings.storage') }}</span>
+        <strong class="numeric">{{ settings_data.storage_free_gb }}</strong>
       </div>
     </div>
   </div>
 
   <!-- Pi Clock Synchronization Card -->
   <div class="card">
-    <h3 class="card-title" style="font-size: 16px; margin-bottom: 10px;">
-      <svg class="icon"><use href="#icon-clock"></use></svg>
-      <span data-i18n="settings.clock">Device clock</span>
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-clock"></use></svg>
+      <span data-i18n="settings.clock">{{ t('settings.clock') }}</span>
     </h3>
-    <div id="clock-warning" class="offline-banner" style="display: none; margin-bottom: 12px;">
+    <div id="clock-warning" class="offline-banner {% if settings_data.clock_set %}hidden{% endif %}">
       <p data-i18n="settings.clockWarning">
-        Clock is not set. Timestamps may be inaccurate after a power cycle.
+        {{ t('settings.clockWarning') }}
       </p>
+    </div>
+    <div id="clock-sync-feedback" class="clock-status-box ok hidden" data-i18n="settings.clockSynced">
+      {{ t('settings.clockSynced') }}
     </div>
     <button type="button" id="btn-sync-clock" class="btn btn-secondary btn-block" data-i18n="settings.clockSync">
       <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
-      <span>Set clock from this device</span>
+      <span>{{ t('settings.clockSync') }}</span>
     </button>
   </div>
 
   <!-- Hardware Calibration (Read-only) -->
   <div class="card">
-    <h3 class="card-title" style="font-size: 16px; margin-bottom: 14px;">
-      <svg class="icon"><use href="#icon-shield"></use></svg>
-      <span data-i18n="settings.calibration">Calibration (read-only)</span>
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-shield"></use></svg>
+      <span data-i18n="settings.calibration">{{ t('settings.calibration') }}</span>
     </h3>
-    <div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px;">
+    <div class="status-list">
       <div class="status-item">
-        <span data-i18n="settings.tofCalDate">ToF calibrated date</span>
-        <strong class="numeric">2026-09-15</strong>
+        <span data-i18n="settings.tofCalDate">{{ t('settings.tofCalDate') }}</span>
+        <strong class="numeric">{{ settings_data.tof_calibrated_date }}</strong>
       </div>
       <div class="status-item">
-        <span data-i18n="settings.ledSetting">LED drive setting</span>
-        <strong class="numeric">50 mA (IR 850 nm)</strong>
+        <span data-i18n="settings.ledSetting">{{ t('settings.ledSetting') }}</span>
+        <strong class="numeric">{{ settings_data.led_drive_setting }}</strong>
       </div>
     </div>
+    <div class="field-disabled-hint" data-i18n="settings.disabledCalHint">
+      {{ t('settings.disabledCalHint') }}
+    </div>
+  </div>
+
+  <!-- Research Mode Toggle Card -->
+  <div class="card">
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-file-text"></use></svg>
+      <span data-i18n="settings.researchMode">{{ t('settings.researchMode') }}</span>
+    </h3>
+    <label class="toggle-label" for="toggle-research-mode">
+      <input type="checkbox" id="toggle-research-mode" class="toggle-checkbox" {% if settings_data.research_mode %}checked{% endif %}>
+      <div>
+        <div class="toggle-title" data-i18n="settings.researchMode">{{ t('settings.researchMode') }}</div>
+        <div class="toggle-desc" data-i18n="settings.researchModeDesc">{{ t('settings.researchModeDesc') }}</div>
+      </div>
+    </label>
   </div>
 
   <!-- Data Management Card -->
   <div class="card">
-    <h3 class="card-title" style="font-size: 16px; margin-bottom: 14px;">
-      <svg class="icon"><use href="#icon-hard-drive"></use></svg>
-      <span data-i18n="settings.data">Data management</span>
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-hard-drive"></use></svg>
+      <span data-i18n="settings.data">{{ t('settings.data') }}</span>
     </h3>
-    <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div class="settings-actions-stack">
       <a href="/api/export.csv" class="btn btn-secondary btn-block" data-i18n="settings.exportCsv">
         <svg class="icon"><use href="#icon-download"></use></svg>
-        <span>Export all sessions as CSV</span>
+        <span>{{ t('settings.exportCsv') }}</span>
       </a>
       <button type="button" id="btn-delete-all" class="btn btn-danger btn-block" data-i18n="settings.deleteAll">
         <svg class="icon"><use href="#icon-trash-2"></use></svg>
-        <span>Delete all session data</span>
+        <span>{{ t('settings.deleteAll') }}</span>
       </button>
+      <div id="data-delete-feedback" class="settings-feedback hidden">
+        All session data deleted.
+      </div>
     </div>
   </div>
 
   <!-- About and Disclaimer Card -->
-  <div class="card" style="background: var(--bg); border: 1px solid var(--border);">
-    <h3 class="card-title" style="font-size: 16px; margin-bottom: 8px;">
-      <svg class="icon"><use href="#icon-info"></use></svg>
-      <span data-i18n="settings.about">About E-Eye</span>
+  <div class="card about-disclaimer-card">
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-info"></use></svg>
+      <span data-i18n="settings.about">{{ t('settings.about') }}</span>
     </h3>
-    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;" data-i18n="settings.aboutBody">
-      E-Eye is a low-cost screening device that estimates refractive error using eccentric infrared photorefraction. It helps decide who should be referred for a full eye exam.
+    <p class="about-body-text" data-i18n="settings.aboutBody">
+      {{ t('settings.aboutBody') }}
     </p>
 
-    <h4 style="font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px;" data-i18n="settings.disclaimerTitle">
-      Disclaimer
+    <h4 class="disclaimer-title-text" data-i18n="settings.disclaimerTitle">
+      {{ t('settings.disclaimerTitle') }}
     </h4>
-    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;" data-i18n="settings.disclaimerBody">
-      E-Eye is intended strictly for refractive error screening in community settings and does not replace a comprehensive examination by a licensed eye care professional.
+    <p class="disclaimer-body-text" data-i18n="settings.disclaimerBody">
+      {{ t('settings.disclaimerBody') }}
     </p>
   </div>
 </div>
 
 <!-- Modal: Confirm Delete All -->
-<div id="delete-all-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true">
+<div id="delete-all-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="delete-all-title">
   <div class="modal-content">
     <div class="modal-header">
-      <h3 style="font-size: 18px; font-weight: 700; color: var(--danger-text);" data-i18n="settings.deleteAll">Delete all session data</h3>
+      <h3 id="delete-all-title" class="modal-title-danger" data-i18n="settings.deleteAll">{{ t('settings.deleteAll') }}</h3>
     </div>
     <div class="modal-body">
       <p data-i18n="settings.deleteAllConfirm">
-        Are you sure you want to permanently delete all session records? This cannot be undone.
+        {{ t('settings.deleteAllConfirm') }}
       </p>
     </div>
     <div class="modal-footer">
-      <button type="button" id="btn-cancel-delete-all" class="btn btn-secondary">Cancel</button>
-      <button type="button" id="btn-confirm-delete-all" class="btn btn-danger">Permanently delete</button>
+      <button type="button" id="btn-cancel-delete-all" class="btn btn-secondary" data-i18n="history.cancel">{{ t('history.cancel') }}</button>
+      <button type="button" id="btn-confirm-delete-all" class="btn btn-danger" data-i18n="settings.deleteAll">{{ t('settings.deleteAll') }}</button>
     </div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script type="module">
-  import { getJson, postJson } from "{{ url_for('static', filename='js/api.js') }}";
-
-  const clockWarning = document.getElementById("clock-warning");
-  const btnSyncClock = document.getElementById("btn-sync-clock");
-
-  async function checkSettings() {
-    try {
-      const res = await getJson("/api/settings");
-      if (!res.clock_set) {
-        clockWarning.style.display = "block";
-      } else {
-        clockWarning.style.display = "none";
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  btnSyncClock.addEventListener("click", async () => {
-    try {
-      await postJson("/api/clock", { iso_timestamp: new Date().toISOString() });
-      clockWarning.style.display = "none";
-      alert("Device clock synchronized with client time.");
-    } catch (err) {
-      alert("Failed to sync clock: " + err.message);
-    }
-  });
-
-  const deleteAllModal = document.getElementById("delete-all-modal");
-  document.getElementById("btn-delete-all").addEventListener("click", () => {
-    deleteAllModal.style.display = "flex";
-  });
-  document.getElementById("btn-cancel-delete-all").addEventListener("click", () => {
-    deleteAllModal.style.display = "none";
-  });
-  document.getElementById("btn-confirm-delete-all").addEventListener("click", async () => {
-    try {
-      // Clear sessions in SQLite
-      alert("All sessions cleared.");
-      deleteAllModal.style.display = "none";
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
-  });
-
-  document.addEventListener("DOMContentLoaded", checkSettings);
-</script>
+<script type="module" src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}

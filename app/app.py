@@ -1,7 +1,7 @@
 import os
 import json
 from flask import Flask, render_template, redirect, url_for, request
-from app.config import MOCK_MODE, MEDIA_FOLDER, SOFTWARE_VERSION, DEVICE_NAME, BASE_DIR
+from app.config import MOCK_MODE, MEDIA_FOLDER, SOFTWARE_VERSION, DEVICE_NAME, DEVICE_SSID, DEVICE_IP, BASE_DIR
 from app import store
 from app.api import api_bp
 from app.mock.fixtures import seed_fixtures_if_empty
@@ -54,6 +54,14 @@ def create_app():
             "t": lambda key, **kw: translate(key, lang=lang, **kw)
         }
     
+    from datetime import datetime
+
+    def generate_next_participant_code():
+        today = datetime.now().strftime("%y%m%d")
+        sessions = store.list_sessions()
+        seq = len(sessions) + 1
+        return f"EE-{today}-{seq:03d}"
+
     # UI Page Routes
     @app.route("/")
     def page_home():
@@ -61,7 +69,9 @@ def create_app():
     
     @app.route("/screen/new")
     def page_new_screening():
-        return render_template("new.html", active_nav="screen")
+        suggested_code = generate_next_participant_code()
+        default_site = store.get_setting("site_name", "")
+        return render_template("new.html", active_nav="screen", suggested_code=suggested_code, default_site=default_site)
     
     @app.route("/screen/<id>/<eye>")
     def page_record(id, eye):
@@ -86,11 +96,23 @@ def create_app():
     
     @app.route("/history")
     def page_history():
-        return render_template("history.html", active_nav="history")
+        sessions = store.list_sessions()
+        return render_template("history.html", active_nav="history", sessions=sessions)
     
     @app.route("/settings")
     def page_settings():
-        return render_template("settings.html", active_nav="settings")
+        settings_data = {
+            "device_name": DEVICE_NAME,
+            "ssid": DEVICE_SSID,
+            "ip": DEVICE_IP,
+            "storage_free_gb": "18.4 GB",
+            "software_version": SOFTWARE_VERSION,
+            "site_name": store.get_setting("site_name", ""),
+            "clock_set": store.get_setting("clock_set", "1") == "1",
+            "tof_calibrated_date": "2026-09-15",
+            "led_drive_setting": "50 mA (IR 850 nm)"
+        }
+        return render_template("settings.html", active_nav="settings", settings_data=settings_data)
     
     return app
 

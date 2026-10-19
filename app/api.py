@@ -254,12 +254,14 @@ def manage_settings():
     
     return jsonify({
         "lang": store.get_setting("lang", "en"),
+        "site_name": store.get_setting("site_name", ""),
         "research_mode": store.get_setting("research_mode", "0") == "1",
         "clock_set": store.get_setting("clock_set", "1") == "1",
         "device_name": DEVICE_NAME,
         "ssid": DEVICE_SSID,
         "ip": DEVICE_IP,
         "version": SOFTWARE_VERSION,
+        "storage_free_gb": "18.4 GB",
         "tof_calibrated_date": "2026-09-15",
         "led_drive_setting": "Current regulated (50 mA)"
     })
@@ -270,3 +272,8 @@ def set_clock():
     iso_time = data.get("iso_timestamp")
     store.set_setting("clock_set", "1")
     return jsonify({"success": True, "device_time": iso_time or datetime.now().isoformat()})
+
+@api_bp.route("/api/sessions/delete-all", methods=["POST"])
+def delete_all_sessions_endpoint():
+    store.delete_all_sessions()
+    return jsonify({"success": True, "message": "All sessions deleted"})

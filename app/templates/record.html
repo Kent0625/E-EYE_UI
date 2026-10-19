@@ -13,7 +13,7 @@
         <span data-i18n="align.os">Left eye (OS)</span>
       {% endif %}
     </h2>
-    <span class="badge badge-ok numeric">{{ session.participant_code if session else 'EE-261019-001' }}</span>
+    <span class="badge badge-ok numeric">{{ session.participant_code if (session and session.participant_code) else '' }}</span>
   </div>
 
   <div class="align-grid">
