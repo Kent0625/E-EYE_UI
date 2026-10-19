@@ -1,3 +1,5 @@
+from app.clinical import compute_se, classify_condition
+
 MOCK_FIXTURES = {
     "refer": {
         "id": "s_mock_refer",
@@ -15,8 +17,8 @@ MOCK_FIXTURES = {
                 "status": "ok",
                 "sphere_D": -1.50,
                 "cylinder_D": -0.50,
-                "se_D": -1.75,
-                "label": "myopia_mild",
+                "se_D": compute_se("-1.50", "-0.50"),
+                "label": classify_condition(compute_se("-1.50", "-0.50")),
                 "frames_used": 10,
                 "frames_total": 118,
                 "distance_cm": {"min": 12.1, "max": 13.4},
@@ -27,8 +29,8 @@ MOCK_FIXTURES = {
                 "status": "ok",
                 "sphere_D": -1.25,
                 "cylinder_D": -0.24,
-                "se_D": -1.37,
-                "label": "myopia_mild",
+                "se_D": compute_se("-1.25", "-0.24"),
+                "label": classify_condition(compute_se("-1.25", "-0.24")),
                 "frames_used": 10,
                 "frames_total": 120,
                 "distance_cm": {"min": 11.8, "max": 13.0},
@@ -53,8 +55,8 @@ MOCK_FIXTURES = {
                 "status": "ok",
                 "sphere_D": 0.25,
                 "cylinder_D": -0.50,
-                "se_D": 0.00,
-                "label": "emmetropia",
+                "se_D": compute_se("0.25", "-0.50"),
+                "label": classify_condition(compute_se("0.25", "-0.50")),
                 "frames_used": 10,
                 "frames_total": 115,
                 "distance_cm": {"min": 12.0, "max": 13.5},
@@ -65,8 +67,8 @@ MOCK_FIXTURES = {
                 "status": "ok",
                 "sphere_D": 0.50,
                 "cylinder_D": -0.50,
-                "se_D": 0.25,
-                "label": "emmetropia",
+                "se_D": compute_se("0.50", "-0.50"),
+                "label": classify_condition(compute_se("0.50", "-0.50")),
                 "frames_used": 10,
                 "frames_total": 112,
                 "distance_cm": {"min": 12.3, "max": 13.1},
@@ -84,15 +86,15 @@ MOCK_FIXTURES = {
         "consent_signed": True,
         "client_time": "2026-10-19T11:00:00+08:00",
         "status": "retake_needed",
-        "referral": None,
-        "referral_eyes": [],
+        "referral": True,
+        "referral_eyes": ["OD"],
         "eyes": {
             "OD": {
                 "status": "ok",
                 "sphere_D": -0.75,
                 "cylinder_D": -0.50,
-                "se_D": -1.00,
-                "label": "myopia_mild",
+                "se_D": compute_se("-0.75", "-0.50"),
+                "label": classify_condition(compute_se("-0.75", "-0.50")),
                 "frames_used": 10,
                 "frames_total": 110,
                 "distance_cm": {"min": 12.2, "max": 13.0},
@@ -103,14 +105,15 @@ MOCK_FIXTURES = {
                 "status": "retake_needed",
                 "frames_used": 6,
                 "frames_total": 108,
-                "error_reason": "Not enough clear frames (6/10 valid). Check for blinking or distance drift."
+                "error_reason": "few_valid_frames"
             }
         }
     }
 }
 
 def seed_fixtures_if_empty(store):
-    sessions = store.list_sessions()
-    if not sessions:
-        for fixture in MOCK_FIXTURES.values():
-            store.create_session(fixture)
+    for fixture in MOCK_FIXTURES.values():
+        existing = store.get_session(fixture["id"])
+        if existing:
+            store.delete_session(fixture["id"])
+        store.create_session(fixture)

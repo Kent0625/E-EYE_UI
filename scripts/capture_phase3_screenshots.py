@@ -75,6 +75,14 @@ def capture():
                         page.screenshot(path=scrolled_path, full_page=False)
                         print(f"Captured {scrolled_path} ({vp['width']}x{vp['height']} scrolled)")
 
+                        if fix['key'] == 'refer':
+                            # Scroll directly to OD card to show stacked thumbnail above non-wrapping SE value
+                            page.locator(".eye-card").first.scroll_into_view_if_needed()
+                            page.wait_for_timeout(200)
+                            od_card_path = "docs/phase3/refer_320px_od_card.png"
+                            page.screenshot(path=od_card_path, full_page=False)
+                            print(f"Captured {od_card_path} (OD stacked card visible)")
+
                         if fix['key'] == 'retake':
                             # Scroll directly to the OS card showing the retake button
                             page.locator(".eye-card").nth(1).scroll_into_view_if_needed()
