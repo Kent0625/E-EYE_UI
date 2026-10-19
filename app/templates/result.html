@@ -3,170 +3,268 @@
 {% block content %}
 <div class="result-container">
   {% set s = session %}
-  {% set is_referral = s.referral if s else true %}
+  {% set is_retake = (not s or s.status == 'retake_needed' or s.referral is none) %}
+  {% set is_referral = s.referral if (s and not is_retake) else false %}
   {% set od = s.eyes.OD if (s and s.eyes and s.eyes.OD) else none %}
   {% set os_eye = s.eyes.OS if (s and s.eyes and s.eyes.OS) else none %}
 
-  <!-- Referral Banner (Full Width First Element) -->
-  <div id="referral-banner" class="card referral-banner {% if is_referral %}badge-warn{% else %}badge-ok{% endif %}"
-       role="status" aria-live="polite">
-    <div class="referral-banner-inner">
-      {% if is_referral %}
-        <svg class="icon icon-lg"><use href="#icon-alert-triangle"></use></svg>
-        <div>
-          <h2 class="referral-banner-title" data-i18n="result.refer">
-            REFERRAL RECOMMENDED
-          </h2>
-          <p class="referral-banner-desc" data-i18n="result.explain.refer">
-            One or both eyes are outside the normal range (−0.50 to +0.50 D). Refer to an optometrist or ophthalmologist for a full eye exam.
-          </p>
-          {% if s and s.referral_eyes %}
-            <p class="referral-banner-eyes">
-              Eye(s) outside normal range: {{ s.referral_eyes | join(', ') }}
-            </p>
+  <div class="result-layout">
+    <!-- Sidebar Column on Desktop (>= 1024px) / Top of Page on Mobile & Tablet (< 1024px) -->
+    <aside class="result-sidebar">
+      <!-- Referral Banner: First element visible at all widths, never red -->
+      <div id="referral-banner" class="card referral-banner {% if is_retake or is_referral %}badge-warn{% else %}badge-ok{% endif %}"
+           role="status" aria-live="polite">
+        <div class="referral-banner-inner">
+          {% if is_retake %}
+            <svg class="icon icon-lg"><use href="#icon-alert-triangle"></use></svg>
+            <div>
+              <h2 class="referral-banner-title" data-i18n="result.incomplete">
+                {{ t('result.incomplete') }}
+              </h2>
+              <p class="referral-banner-desc" data-i18n="result.explain.incomplete">
+                {{ t('result.explain.incomplete') }}
+              </p>
+            </div>
+          {% elif is_referral %}
+            <svg class="icon icon-lg"><use href="#icon-alert-triangle"></use></svg>
+            <div>
+              <h2 class="referral-banner-title" data-i18n="result.refer">
+                {{ t('result.refer') }}
+              </h2>
+              <p class="referral-banner-desc" data-i18n="result.explain.refer">
+                {{ t('result.explain.refer') }}
+              </p>
+              {% if s and s.referral_eyes %}
+                <p class="referral-banner-eyes">
+                  <span data-i18n="result.eyesOutside">{{ t('result.eyesOutside') }}</span>{{ s.referral_eyes | join(', ') }}
+                </p>
+              {% endif %}
+            </div>
+          {% else %}
+            <svg class="icon icon-lg"><use href="#icon-check-circle"></use></svg>
+            <div>
+              <h2 class="referral-banner-title" data-i18n="result.noRefer">
+                {{ t('result.noRefer') }}
+              </h2>
+              <p class="referral-banner-desc" data-i18n="result.explain.noRefer">
+                {{ t('result.explain.noRefer') }}
+              </p>
+            </div>
           {% endif %}
         </div>
-      {% else %}
-        <svg class="icon icon-lg"><use href="#icon-check-circle"></use></svg>
-        <div>
-          <h2 class="referral-banner-title" data-i18n="result.noRefer">
-            NO REFERRAL NEEDED
-          </h2>
-          <p class="referral-banner-desc" data-i18n="result.explain.noRefer">
-            Both eyes are within the normal range. No referral is needed based on this screening.
+      </div>
+
+      <!-- Desktop Sidebar Metadata & Action Panel (visible >= 1024px) -->
+      <div class="result-sidebar-desktop-panel">
+        <div class="card result-meta-card">
+          <div class="result-meta-row numeric">
+            <div><strong>{{ t('result.participant') }}:</strong> {{ s.participant_code if s else 'EE-261019-001' }}</div>
+            <div><strong>{{ t('result.date') }}:</strong> {{ s.created_at[:16].replace('T', ' ') if s else '2026-10-19 09:41' }}</div>
+            <div><strong>{{ t('result.site') }}:</strong> {{ s.site if (s and s.site) else 'RHU Sumilao' }}</div>
+          </div>
+          {% if (od and od.distance_cm) or (os_eye and os_eye.distance_cm) %}
+            <div class="result-distance-line numeric">
+              <strong>{{ t('result.captureDistance') }}:</strong>
+              {% if od and od.distance_cm %}OD {{ od.distance_cm.min }}–{{ od.distance_cm.max }} cm{% endif %}
+              {% if od and od.distance_cm and os_eye and os_eye.distance_cm %} &bull; {% endif %}
+              {% if os_eye and os_eye.distance_cm %}OS {{ os_eye.distance_cm.min }}–{{ os_eye.distance_cm.max }} cm{% endif %}
+            </div>
+          {% endif %}
+          <p class="result-disclaimer" data-i18n="result.disclaimer">
+            {{ t('result.disclaimer') }}
           </p>
         </div>
-      {% endif %}
-    </div>
-  </div>
 
-  <!-- Main Result Content Grid -->
-  <div class="result-grid">
-    <!-- OD / OS Cards -->
-    <div class="eye-cards-container" id="eye-cards-container">
-      
-      <!-- Right Eye (OD) Card -->
-      <div class="card eye-card">
-        <div class="card-header eye-card-header">
-          <h3 class="card-title eye-card-title">
-            <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
-            <span data-i18n="result.od">Right Eye (OD)</span>
-          </h3>
+        <div class="result-actions">
+          <a href="/screen/new" class="btn btn-primary btn-block" data-i18n="result.newScreening">
+            <svg class="icon"><use href="#icon-plus"></use></svg>
+            <span>{{ t('result.newScreening') }}</span>
+          </a>
+          <a href="/history" class="btn btn-secondary btn-block" data-i18n="result.viewHistory">
+            <svg class="icon"><use href="#icon-history"></use></svg>
+            <span>{{ t('result.viewHistory') }}</span>
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Results Column (Left on Desktop, below banner on Mobile & Tablet) -->
+    <main class="result-main">
+      <div class="eye-cards-container" id="eye-cards-container">
+        <!-- Right Eye (OD) Card -->
+        <div class="card eye-card">
+          <div class="card-header eye-card-header">
+            <h3 class="card-title eye-card-title">
+              <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
+              <span data-i18n="result.od">{{ t('result.od') }}</span>
+            </h3>
+            {% if od and od.status == 'ok' %}
+              <span class="badge {% if od.label == 'emmetropia' %}badge-ok{% else %}badge-warn{% endif %}">
+                {% if od.label == 'myopia_mild' %}
+                  <span data-i18n="label.myopia.mild">{{ t('label.myopia.mild') }}</span>
+                {% elif od.label == 'myopia_moderate' %}
+                  <span data-i18n="label.myopia.moderate">{{ t('label.myopia.moderate') }}</span>
+                {% elif od.label == 'myopia_high' %}
+                  <span data-i18n="label.myopia.high">{{ t('label.myopia.high') }}</span>
+                {% elif od.label == 'hyperopia' %}
+                  <span data-i18n="label.hyperopia">{{ t('label.hyperopia') }}</span>
+                {% else %}
+                  <span data-i18n="label.emmetropia">{{ t('label.emmetropia') }}</span>
+                {% endif %}
+              </span>
+            {% elif od and od.status == 'retake_needed' %}
+              <span class="badge badge-warn" data-i18n="result.retakeNeeded">{{ t('result.retakeNeeded') }}</span>
+            {% else %}
+              <span class="badge badge-warn" data-i18n="result.notRecorded">{{ t('result.notRecorded') }}</span>
+            {% endif %}
+          </div>
+
           {% if od and od.status == 'ok' %}
-            <span class="badge badge-ok">
-              {% if od.label == 'myopia_mild' %}
-                <span data-i18n="label.myopia.mild">Myopia, mild</span>
-              {% elif od.label == 'myopia_moderate' %}
-                <span data-i18n="label.myopia.moderate">Myopia, moderate</span>
-              {% elif od.label == 'myopia_high' %}
-                <span data-i18n="label.myopia.high">Myopia, high</span>
-              {% elif od.label == 'hyperopia' %}
-                <span data-i18n="label.hyperopia">Hyperopia</span>
-              {% else %}
-                <span data-i18n="label.emmetropia">Near-emmetropia</span>
+            <div class="eye-card-body">
+              <img src="{{ od.thumbnail_url or '/media/OD_sample.jpg' }}" alt="Right eye pupil thumbnail"
+                   class="eye-thumbnail">
+              <div>
+                <div class="eye-se-label" data-i18n="result.se">{{ t('result.se') }}</div>
+                <!-- Large SE in diopters with sign and tabular numerals -->
+                <div class="eye-se-value numeric" id="od-se-val">
+                  {{ "−" if od.se_D < 0 else ("+" if od.se_D > 0 else "") }}{{ "%.2f" | format(od.se_D | abs) }} D
+                </div>
+                <div class="eye-sphere-cyl numeric">
+                  <span data-i18n="result.sphere">{{ t('result.sphere') }}</span>: {{ "%+.2f" | format(od.sphere_D) if od.sphere_D is defined else od.sphere_D }} D &bull; <span data-i18n="result.cylinder">{{ t('result.cylinder') }}</span>: {{ "%+.2f" | format(od.cylinder_D) if od.cylinder_D is defined else od.cylinder_D }} D
+                </div>
+                <div class="eye-se-rule-note" data-i18n="result.seRule">
+                  {{ t('result.seRule') }}
+                </div>
+              </div>
+            </div>
+            <div class="eye-quality-line numeric">
+              <span>{{ od.frames_used }} of {{ od.frames_total }} frames used</span>
+              {% if od.distance_cm %}
+                <span>{{ od.distance_cm.min }}–{{ od.distance_cm.max }} cm</span>
               {% endif %}
-            </span>
+            </div>
+          {% elif od and od.status == 'retake_needed' %}
+            <div class="eye-retake-body">
+              <p class="eye-retake-error">
+                {{ od.error_reason or 'Not enough clear frames. Likely causes: blinking during capture, head movement, or distance drifted.' }}
+              </p>
+              <div class="eye-quality-line numeric">
+                <span>{{ od.frames_used }} of {{ od.frames_total }} frames used</span>
+              </div>
+              <a href="/screen/{{ s.id }}/OD" class="btn btn-secondary btn-block" data-i18n="result.retakeBtnOD">
+                <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
+                <span>{{ t('result.retakeBtnOD') }}</span>
+              </a>
+            </div>
           {% else %}
-            <span class="badge badge-warn" data-i18n="result.notRecorded">Not recorded</span>
+            <p class="eye-unrecorded" data-i18n="result.unrecordedOD">{{ t('result.unrecordedOD') }}</p>
           {% endif %}
         </div>
 
-        {% if od and od.status == 'ok' %}
-          <div class="eye-card-body">
-            <img src="{{ od.thumbnail_url or '/media/OD_sample.jpg' }}" alt="Right eye pupil thumbnail"
-                 class="eye-thumbnail">
-            <div>
-              <div class="eye-se-label" data-i18n="result.se">Spherical Equivalent (SE)</div>
-              <!-- Large SE with tabular nums and true minus sign -->
-              <div class="eye-se-value numeric">
-                {{ "−" if od.se_D < 0 else ("+" if od.se_D > 0 else "") }}{{ "%.2f" | format(od.se_D | abs) }} D
-              </div>
-              <div class="eye-sphere-cyl numeric">
-                <span data-i18n="result.sphere">Sphere</span>: {{ od.sphere_D }} D &bull; <span data-i18n="result.cylinder">Cylinder</span>: {{ od.cylinder_D }} D
-              </div>
-            </div>
+        <!-- Left Eye (OS) Card -->
+        <div class="card eye-card">
+          <div class="card-header eye-card-header">
+            <h3 class="card-title eye-card-title">
+              <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
+              <span data-i18n="result.os">{{ t('result.os') }}</span>
+            </h3>
+            {% if os_eye and os_eye.status == 'ok' %}
+              <span class="badge {% if os_eye.label == 'emmetropia' %}badge-ok{% else %}badge-warn{% endif %}">
+                {% if os_eye.label == 'myopia_mild' %}
+                  <span data-i18n="label.myopia.mild">{{ t('label.myopia.mild') }}</span>
+                {% elif os_eye.label == 'myopia_moderate' %}
+                  <span data-i18n="label.myopia.moderate">{{ t('label.myopia.moderate') }}</span>
+                {% elif os_eye.label == 'myopia_high' %}
+                  <span data-i18n="label.myopia.high">{{ t('label.myopia.high') }}</span>
+                {% elif os_eye.label == 'hyperopia' %}
+                  <span data-i18n="label.hyperopia">{{ t('label.hyperopia') }}</span>
+                {% else %}
+                  <span data-i18n="label.emmetropia">{{ t('label.emmetropia') }}</span>
+                {% endif %}
+              </span>
+            {% elif os_eye and os_eye.status == 'retake_needed' %}
+              <span class="badge badge-warn" data-i18n="result.retakeNeeded">{{ t('result.retakeNeeded') }}</span>
+            {% else %}
+              <span class="badge badge-warn" data-i18n="result.notRecorded">{{ t('result.notRecorded') }}</span>
+            {% endif %}
           </div>
-          <div class="eye-frames-used numeric">
-            {{ od.frames_used }} of {{ od.frames_total }} frames used
-          </div>
-        {% else %}
-          <p class="eye-unrecorded">Right eye was not recorded.</p>
-        {% endif %}
-      </div>
 
-      <!-- Left Eye (OS) Card -->
-      <div class="card eye-card">
-        <div class="card-header eye-card-header">
-          <h3 class="card-title eye-card-title">
-            <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
-            <span data-i18n="result.os">Left Eye (OS)</span>
-          </h3>
           {% if os_eye and os_eye.status == 'ok' %}
-            <span class="badge badge-ok">
-              {% if os_eye.label == 'myopia_mild' %}
-                <span data-i18n="label.myopia.mild">Myopia, mild</span>
-              {% elif os_eye.label == 'myopia_moderate' %}
-                <span data-i18n="label.myopia.moderate">Myopia, moderate</span>
-              {% elif os_eye.label == 'myopia_high' %}
-                <span data-i18n="label.myopia.high">Myopia, high</span>
-              {% elif os_eye.label == 'hyperopia' %}
-                <span data-i18n="label.hyperopia">Hyperopia</span>
-              {% else %}
-                <span data-i18n="label.emmetropia">Near-emmetropia</span>
-              {% endif %}
-            </span>
-          {% else %}
-            <span class="badge badge-warn" data-i18n="result.notRecorded">Not recorded</span>
-          {% endif %}
-        </div>
-
-        {% if os_eye and os_eye.status == 'ok' %}
-          <div class="eye-card-body">
-            <img src="{{ os_eye.thumbnail_url or '/media/OS_sample.jpg' }}" alt="Left eye pupil thumbnail"
-                 class="eye-thumbnail">
-            <div>
-              <div class="eye-se-label" data-i18n="result.se">Spherical Equivalent (SE)</div>
-              <div class="eye-se-value numeric">
-                {{ "−" if os_eye.se_D < 0 else ("+" if os_eye.se_D > 0 else "") }}{{ "%.2f" | format(os_eye.se_D | abs) }} D
-              </div>
-              <div class="eye-sphere-cyl numeric">
-                <span data-i18n="result.sphere">Sphere</span>: {{ os_eye.sphere_D }} D &bull; <span data-i18n="result.cylinder">Cylinder</span>: {{ os_eye.cylinder_D }} D
+            <div class="eye-card-body">
+              <img src="{{ os_eye.thumbnail_url or '/media/OS_sample.jpg' }}" alt="Left eye pupil thumbnail"
+                   class="eye-thumbnail">
+              <div>
+                <div class="eye-se-label" data-i18n="result.se">{{ t('result.se') }}</div>
+                <!-- Large SE in diopters with sign and tabular numerals -->
+                <div class="eye-se-value numeric" id="os-se-val">
+                  {{ "−" if os_eye.se_D < 0 else ("+" if os_eye.se_D > 0 else "") }}{{ "%.2f" | format(os_eye.se_D | abs) }} D
+                </div>
+                <div class="eye-sphere-cyl numeric">
+                  <span data-i18n="result.sphere">{{ t('result.sphere') }}</span>: {{ "%+.2f" | format(os_eye.sphere_D) if os_eye.sphere_D is defined else os_eye.sphere_D }} D &bull; <span data-i18n="result.cylinder">{{ t('result.cylinder') }}</span>: {{ "%+.2f" | format(os_eye.cylinder_D) if os_eye.cylinder_D is defined else os_eye.cylinder_D }} D
+                </div>
+                <div class="eye-se-rule-note" data-i18n="result.seRule">
+                  {{ t('result.seRule') }}
+                </div>
               </div>
             </div>
-          </div>
-          <div class="eye-frames-used numeric">
-            {{ os_eye.frames_used }} of {{ os_eye.frames_total }} frames used
-          </div>
-        {% else %}
-          <p class="eye-unrecorded">Left eye was not recorded.</p>
-        {% endif %}
+            <div class="eye-quality-line numeric">
+              <span>{{ os_eye.frames_used }} of {{ os_eye.frames_total }} frames used</span>
+              {% if os_eye.distance_cm %}
+                <span>{{ os_eye.distance_cm.min }}–{{ os_eye.distance_cm.max }} cm</span>
+              {% endif %}
+            </div>
+          {% elif os_eye and os_eye.status == 'retake_needed' %}
+            <div class="eye-retake-body">
+              <p class="eye-retake-error">
+                {{ os_eye.error_reason or 'Not enough clear frames. Likely causes: blinking during capture, head movement, or distance drifted.' }}
+              </p>
+              <div class="eye-quality-line numeric">
+                <span>{{ os_eye.frames_used }} of {{ os_eye.frames_total }} frames used</span>
+              </div>
+              <a href="/screen/{{ s.id }}/OS" class="btn btn-secondary btn-block" data-i18n="result.retakeBtnOS">
+                <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
+                <span>{{ t('result.retakeBtnOS') }}</span>
+              </a>
+            </div>
+          {% else %}
+            <p class="eye-unrecorded" data-i18n="result.unrecordedOS">{{ t('result.unrecordedOS') }}</p>
+          {% endif %}
+        </div>
       </div>
 
-    </div>
+      <!-- Mobile/Tablet Metadata & Actions (hidden >= 1024px) -->
+      <div class="result-mobile-bottom-panel">
+        <div class="card result-meta-card">
+          <div class="result-meta-row numeric">
+            <div><strong>{{ t('result.participant') }}:</strong> {{ s.participant_code if s else 'EE-261019-001' }}</div>
+            <div><strong>{{ t('result.date') }}:</strong> {{ s.created_at[:16].replace('T', ' ') if s else '2026-10-19 09:41' }}</div>
+            <div><strong>{{ t('result.site') }}:</strong> {{ s.site if (s and s.site) else 'RHU Sumilao' }}</div>
+          </div>
+          {% if (od and od.distance_cm) or (os_eye and os_eye.distance_cm) %}
+            <div class="result-distance-line numeric">
+              <strong>{{ t('result.captureDistance') }}:</strong>
+              {% if od and od.distance_cm %}OD {{ od.distance_cm.min }}–{{ od.distance_cm.max }} cm{% endif %}
+              {% if od and od.distance_cm and os_eye and os_eye.distance_cm %} &bull; {% endif %}
+              {% if os_eye and os_eye.distance_cm %}OS {{ os_eye.distance_cm.min }}–{{ os_eye.distance_cm.max }} cm{% endif %}
+            </div>
+          {% endif %}
+          <p class="result-disclaimer" data-i18n="result.disclaimer">
+            {{ t('result.disclaimer') }}
+          </p>
+        </div>
 
-    <!-- Metadata & Statutory Disclaimer -->
-    <div class="card result-meta-card">
-      <div class="result-meta-row numeric">
-        <div><strong>Participant:</strong> {{ s.participant_code if s else 'EE-261019-001' }}</div>
-        <div><strong>Date:</strong> {{ s.created_at if s else '2026-10-19 09:41' }}</div>
-        <div><strong>Site:</strong> {{ s.site if (s and s.site) else 'RHU Sumilao' }}</div>
+        <div class="result-actions">
+          <a href="/screen/new" class="btn btn-primary btn-block" data-i18n="result.newScreening">
+            <svg class="icon"><use href="#icon-plus"></use></svg>
+            <span>{{ t('result.newScreening') }}</span>
+          </a>
+          <a href="/history" class="btn btn-secondary btn-block" data-i18n="result.viewHistory">
+            <svg class="icon"><use href="#icon-history"></use></svg>
+            <span>{{ t('result.viewHistory') }}</span>
+          </a>
+        </div>
       </div>
-      <p class="result-disclaimer" data-i18n="result.disclaimer">
-        Screening only. This is not a diagnosis or a prescription.
-      </p>
-    </div>
-
-    <!-- Primary Actions -->
-    <div class="result-actions">
-      <a href="/screen/new" class="btn btn-primary btn-block" data-i18n="result.newScreening">
-        <svg class="icon"><use href="#icon-plus"></use></svg>
-        <span>New screening</span>
-      </a>
-      <a href="/history" class="btn btn-secondary btn-block" data-i18n="result.viewHistory">
-        <svg class="icon"><use href="#icon-history"></use></svg>
-        <span>View history</span>
-      </a>
-    </div>
+    </main>
   </div>
 </div>
 {% endblock %}

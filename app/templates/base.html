@@ -13,7 +13,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <!-- Embedded Lucide SVG Sprite for reliable offline rendering -->
-  <div style="display: none;">
+  <div class="hidden" aria-hidden="true">
     {% include "sprite_inline.html" ignore missing %}
   </div>
 

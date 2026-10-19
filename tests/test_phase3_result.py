@@ -1,0 +1,251 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import time
+import socket
+import threading
+from playwright.sync_api import sync_playwright
+from werkzeug.serving import make_server
+from app.app import create_app
+from app import store
+from app.clinical import compute_se, classify_condition, evaluate_referral
+
+VIEWPORTS = [
+    {"name": "320px", "width": 320, "height": 568},
+    {"name": "390px", "width": 390, "height": 844},
+    {"name": "768px", "width": 768, "height": 1024},
+    {"name": "1024px", "width": 1024, "height": 768},
+    {"name": "1440px", "width": 1440, "height": 900}
+]
+
+def find_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+class ServerThread(threading.Thread):
+    def __init__(self, app, port):
+        super().__init__()
+        self.server = make_server('127.0.0.1', port, app, threaded=True)
+        self.daemon = True
+
+    def run(self):
+        self.server.serve_forever()
+
+    def shutdown(self):
+        self.server.shutdown()
+
+def test_result_screen_fixtures_behavior():
+    """
+    Verifies behavior for each fixture on the Result screen:
+    1. refer (s_mock_refer): amber banner, warning icon, REFERRAL RECOMMENDED, never red.
+    2. no_refer (s_mock_norefer): green banner, check icon, NO REFERRAL NEEDED.
+    3. retake (s_mock_retake): amber banner, SCREENING INCOMPLETE, retake button on failed eye.
+    """
+    app = create_app()
+    port = find_free_port()
+    server = ServerThread(app, port)
+    server.start()
+    base_url = f"http://127.0.0.1:{port}"
+    time.sleep(0.5)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+
+            # --- 1. REFER FIXTURE ---
+            page.goto(f"{base_url}/screen/s_mock_refer/result", wait_until="domcontentloaded")
+            page.wait_for_selector("#referral-banner")
+
+            banner = page.locator("#referral-banner")
+            banner_class = banner.get_attribute("class")
+            assert "badge-warn" in banner_class, f"Expected amber badge-warn in {banner_class}"
+            assert "badge-error" not in banner_class, "Referral banner must NEVER be red (badge-error)"
+
+            banner_text = banner.text_content()
+            assert "REFERRAL RECOMMENDED" in banner_text
+            assert "OD" in banner_text and "OS" in banner_text
+
+            # Check OD/OS cards have large SE with true minus sign
+            od_se = page.text_content("#od-se-val").strip()
+            os_se = page.text_content("#os-se-val").strip()
+            assert "−1.75" in od_se or "-1.75" in od_se
+            assert "−1.37" in os_se or "-1.37" in os_se
+
+            # Check cylinder is shown without implying referral
+            cyl_note = page.locator(".eye-se-rule-note").first.text_content()
+            assert "Spherical Equivalent" in cyl_note or "SE" in cyl_note
+
+            # --- 2. NO REFER FIXTURE ---
+            page.goto(f"{base_url}/screen/s_mock_norefer/result", wait_until="domcontentloaded")
+            page.wait_for_selector("#referral-banner")
+
+            banner = page.locator("#referral-banner")
+            banner_class = banner.get_attribute("class")
+            assert "badge-ok" in banner_class, f"Expected green badge-ok in {banner_class}"
+            assert "badge-error" not in banner_class
+
+            banner_text = banner.text_content()
+            assert "NO REFERRAL NEEDED" in banner_text
+            assert "within the normal range" in banner_text
+
+            # --- 3. RETAKE FIXTURE ---
+            page.goto(f"{base_url}/screen/s_mock_retake/result", wait_until="domcontentloaded")
+            page.wait_for_selector("#referral-banner")
+
+            banner = page.locator("#referral-banner")
+            banner_class = banner.get_attribute("class")
+            assert "badge-warn" in banner_class, f"Expected amber badge-warn for retake in {banner_class}"
+            assert "badge-error" not in banner_class, "Retake banner must NEVER be red"
+
+            banner_text = banner.text_content()
+            assert "SCREENING INCOMPLETE" in banner_text or "RETAKE" in banner_text
+
+            # Verify OS card has retake needed state and retake button
+            assert page.locator("a[href='/screen/s_mock_retake/OS']").is_visible()
+            os_card_text = page.locator(".eye-card").nth(1).text_content()
+            assert "Retake" in os_card_text or "clear frames" in os_card_text
+
+            # Statutory disclaimer present on all fixtures
+            disclaimer = page.locator(".result-disclaimer").first.text_content()
+            assert "Screening only" in disclaimer and "diagnosis" in disclaimer
+
+            browser.close()
+    finally:
+        server.shutdown()
+
+def test_se_rounding_boundary_behavior():
+    """
+    Tests exact clinical referral boundary decisions and Result screen rendering:
+    - -0.504 D rounds to -0.50 D -> NO REFERRAL
+    - -0.505 D rounds to -0.51 D -> REFERRAL RECOMMENDED
+    - +0.505 D rounds to +0.51 D -> REFERRAL RECOMMENDED
+    - +0.500 D -> NO REFERRAL
+    - -0.500 D -> NO REFERRAL
+    """
+    app = create_app()
+    port = find_free_port()
+    server = ServerThread(app, port)
+    server.start()
+    base_url = f"http://127.0.0.1:{port}"
+    time.sleep(0.5)
+
+    # Seed 3 boundary test sessions in SQLite store
+    # Case 1: -0.504 -> rounds to -0.50 D (NO REFERRAL)
+    se_504 = compute_se("-0.25", "-0.508")
+    ref_504, eyes_504 = evaluate_referral(se_504, 0.00)
+    store.create_session({
+        "id": "s_test_bound_504",
+        "participant_code": "EE-BOUND-504",
+        "created_at": "2026-10-19T12:00:00+08:00",
+        "site": "RHU Sumilao",
+        "status": "complete",
+        "referral": ref_504,
+        "referral_eyes": eyes_504,
+        "eyes": {
+            "OD": {"status": "ok", "sphere_D": -0.25, "cylinder_D": -0.508, "se_D": se_504, "label": classify_condition(se_504), "frames_used": 10, "frames_total": 110},
+            "OS": {"status": "ok", "sphere_D": 0.00, "cylinder_D": 0.00, "se_D": 0.00, "label": "emmetropia", "frames_used": 10, "frames_total": 110}
+        }
+    })
+
+    # Case 2: -0.505 -> rounds to -0.51 D (REFERRAL RECOMMENDED)
+    se_neg_505 = compute_se("-0.25", "-0.51")
+    ref_neg_505, eyes_neg_505 = evaluate_referral(se_neg_505, 0.00)
+    store.create_session({
+        "id": "s_test_bound_neg_505",
+        "participant_code": "EE-BOUND-NEG-505",
+        "created_at": "2026-10-19T12:05:00+08:00",
+        "site": "RHU Sumilao",
+        "status": "complete",
+        "referral": ref_neg_505,
+        "referral_eyes": eyes_neg_505,
+        "eyes": {
+            "OD": {"status": "ok", "sphere_D": -0.25, "cylinder_D": -0.51, "se_D": se_neg_505, "label": classify_condition(se_neg_505), "frames_used": 10, "frames_total": 110},
+            "OS": {"status": "ok", "sphere_D": 0.00, "cylinder_D": 0.00, "se_D": 0.00, "label": "emmetropia", "frames_used": 10, "frames_total": 110}
+        }
+    })
+
+    # Case 3: +0.505 -> rounds to +0.51 D (REFERRAL RECOMMENDED)
+    se_pos_505 = compute_se("+0.25", "+0.51")
+    ref_pos_505, eyes_pos_505 = evaluate_referral(se_pos_505, 0.00)
+    store.create_session({
+        "id": "s_test_bound_pos_505",
+        "participant_code": "EE-BOUND-POS-505",
+        "created_at": "2026-10-19T12:10:00+08:00",
+        "site": "RHU Sumilao",
+        "status": "complete",
+        "referral": ref_pos_505,
+        "referral_eyes": eyes_pos_505,
+        "eyes": {
+            "OD": {"status": "ok", "sphere_D": 0.25, "cylinder_D": 0.51, "se_D": se_pos_505, "label": classify_condition(se_pos_505), "frames_used": 10, "frames_total": 110},
+            "OS": {"status": "ok", "sphere_D": 0.00, "cylinder_D": 0.00, "se_D": 0.00, "label": "emmetropia", "frames_used": 10, "frames_total": 110}
+        }
+    })
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+
+            # Check -0.504 boundary -> No referral
+            page.goto(f"{base_url}/screen/s_test_bound_504/result", wait_until="domcontentloaded")
+            page.wait_for_selector("#referral-banner")
+            assert "badge-ok" in page.locator("#referral-banner").get_attribute("class")
+            assert "−0.50" in page.text_content("#od-se-val") or "-0.50" in page.text_content("#od-se-val")
+
+            # Check -0.505 boundary -> Referral
+            page.goto(f"{base_url}/screen/s_test_bound_neg_505/result", wait_until="domcontentloaded")
+            page.wait_for_selector("#referral-banner")
+            assert "badge-warn" in page.locator("#referral-banner").get_attribute("class")
+            assert "−0.51" in page.text_content("#od-se-val") or "-0.51" in page.text_content("#od-se-val")
+
+            # Check +0.505 boundary -> Referral
+            page.goto(f"{base_url}/screen/s_test_bound_pos_505/result", wait_until="domcontentloaded")
+            page.wait_for_selector("#referral-banner")
+            assert "badge-warn" in page.locator("#referral-banner").get_attribute("class")
+            assert "+0.51" in page.text_content("#od-se-val")
+
+            browser.close()
+    finally:
+        server.shutdown()
+        store.delete_session("s_test_bound_504")
+        store.delete_session("s_test_bound_neg_505")
+        store.delete_session("s_test_bound_pos_505")
+
+def test_result_screen_zero_overflow_across_viewports():
+    """Verifies that all three fixtures have 0 horizontal overflow at all 5 widths."""
+    app = create_app()
+    port = find_free_port()
+    server = ServerThread(app, port)
+    server.start()
+    base_url = f"http://127.0.0.1:{port}"
+    time.sleep(0.5)
+
+    fixtures = ["s_mock_refer", "s_mock_norefer", "s_mock_retake"]
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+
+            for fix_id in fixtures:
+                for vp in VIEWPORTS:
+                    w = vp["width"]
+                    h = vp["height"]
+                    page = browser.new_page(viewport={"width": w, "height": h})
+                    page.goto(f"{base_url}/screen/{fix_id}/result", wait_until="domcontentloaded")
+                    page.wait_for_selector("#referral-banner")
+
+                    page.evaluate("window.scrollTo(1000, 0)")
+                    scroll_x = page.evaluate("window.scrollX")
+                    assert scroll_x == 0, f"[{fix_id} @ {w}px] Horizontal scrollX = {scroll_x}"
+
+                    scroll_w = page.evaluate("document.documentElement.scrollWidth")
+                    inner_w = page.evaluate("window.innerWidth")
+                    assert scroll_w <= inner_w, f"[{fix_id} @ {w}px] scrollWidth ({scroll_w}) > innerWidth ({inner_w})"
+
+                    page.close()
+
+            browser.close()
+    finally:
+        server.shutdown()

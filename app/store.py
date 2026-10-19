@@ -39,7 +39,7 @@ def create_session(session_dict):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO sessions (
+            INSERT OR REPLACE INTO sessions (
                 id, participant_code, created_at, site,
                 consent_age, consent_signed, client_time,
                 status, referral, referral_eyes, eyes_data
