@@ -7,7 +7,8 @@ from flask import Blueprint, jsonify, request, Response, send_from_directory
 from app import store
 from app.config import (
     MOCK_MODE, MEDIA_FOLDER, DEVICE_NAME, DEVICE_SSID,
-    DEVICE_IP, SOFTWARE_VERSION
+    DEVICE_IP, SOFTWARE_VERSION, get_storage_free_gb,
+    get_storage_free_str, TOF_CALIBRATED_DATE, LED_DRIVE_SETTING
 )
 from app.mock.generator import generate_mock_distance_events, generate_mock_mjpeg_stream
 
@@ -27,7 +28,7 @@ def get_status():
         "tof": "error" if simulate_fail == "tof" else "ok",
         "led": "error" if simulate_fail == "led" else "ok",
         "model": "error" if simulate_fail == "model" else "loaded",
-        "storage_free_gb": 18.4,
+        "storage_free_gb": get_storage_free_gb(),
         "clock_set": False if simulate_fail == "clock" else clock_set,
         "version": SOFTWARE_VERSION,
         "device_name": DEVICE_NAME,
@@ -208,6 +209,18 @@ def update_ground_truth(id):
     updated = store.update_session(id, eyes=eyes)
     return jsonify(updated)
 
+def sanitize_csv_cell(val):
+    """
+    Prevents spreadsheet formula injection in CSV exports by prefixing
+    cells starting with '=', '+', '-', '@', '\t', or '\r' with a single quote.
+    """
+    if val is None:
+        return ""
+    s = str(val)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
 @api_bp.route("/api/export.csv", methods=["GET"])
 def export_csv():
     sessions = store.list_sessions()
@@ -228,7 +241,7 @@ def export_csv():
         od_gt = od.get("ground_truth") or {}
         os_gt = os_eye.get("ground_truth") or {}
         
-        writer.writerow([
+        row = [
             s["id"], s["participant_code"], s["created_at"], s.get("site", ""),
             "REFERRAL" if s["referral"] else ("NO_REFERRAL" if s["referral"] is False else "INCOMPLETE"),
             ";".join(s.get("referral_eyes", [])),
@@ -236,7 +249,8 @@ def export_csv():
             os_eye.get("status", ""), os_eye.get("sphere_D", ""), os_eye.get("cylinder_D", ""), os_eye.get("se_D", ""), os_eye.get("label", ""), os_eye.get("frames_used", ""),
             od_gt.get("sphere_D", ""), od_gt.get("cylinder_D", ""), od_gt.get("se_D", ""),
             os_gt.get("sphere_D", ""), os_gt.get("cylinder_D", ""), os_gt.get("se_D", "")
-        ])
+        ]
+        writer.writerow([sanitize_csv_cell(c) for c in row])
     
     return Response(
         output.getvalue(),
@@ -255,15 +269,15 @@ def manage_settings():
     return jsonify({
         "lang": store.get_setting("lang", "en"),
         "site_name": store.get_setting("site_name", ""),
-        "research_mode": store.get_setting("research_mode", "0") == "1",
         "clock_set": store.get_setting("clock_set", "1") == "1",
         "device_name": DEVICE_NAME,
         "ssid": DEVICE_SSID,
         "ip": DEVICE_IP,
         "version": SOFTWARE_VERSION,
-        "storage_free_gb": "18.4 GB",
-        "tof_calibrated_date": "2026-09-15",
-        "led_drive_setting": "Current regulated (50 mA)"
+        "storage_free_gb": get_storage_free_str(),
+        "tof_calibrated_date": TOF_CALIBRATED_DATE or "Not recorded",
+        "led_drive_setting": LED_DRIVE_SETTING or "Not set",
+        "mock_mode": MOCK_MODE
     })
 
 @api_bp.route("/api/clock", methods=["POST"])

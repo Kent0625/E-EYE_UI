@@ -6,13 +6,22 @@ let activeFilter = "all";
 let sessionToDelete = null;
 let currentSessions = [];
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function formatEyeSummary(eyes) {
-  if (!eyes) return { od: "OD: --", os: "OS: --" };
+  if (!eyes) return { od: "OD: Not recorded", os: "OS: Not recorded" };
   const formatSe = (eye) => {
-    if (!eye || eye.status !== "ok" || eye.se_D === undefined || eye.se_D === null) {
-      if (eye && eye.status === "retake_needed") return "Retake";
-      return "--";
-    }
+    if (!eye || eye.status === "not_recorded") return "Not recorded";
+    if (eye.status === "retake_needed") return "Retake needed";
+    if (eye.status !== "ok" || eye.se_D === undefined || eye.se_D === null) return "Not recorded";
     const val = Number(eye.se_D);
     const sign = val < 0 ? "\u2212" : (val > 0 ? "+" : "");
     return `${sign}${Math.abs(val).toFixed(2)} D`;
@@ -21,6 +30,15 @@ function formatEyeSummary(eyes) {
     od: `OD: ${formatSe(eyes.OD)}`,
     os: `OS: ${formatSe(eyes.OS)}`
   };
+}
+
+function formatEyeVal(eye) {
+  if (!eye || eye.status === "not_recorded") return "Not recorded";
+  if (eye.status === "retake_needed") return "Retake needed";
+  if (eye.status !== "ok" || eye.se_D === undefined || eye.se_D === null) return "Not recorded";
+  const val = Number(eye.se_D);
+  const sign = val < 0 ? "\u2212" : (val > 0 ? "+" : "");
+  return `${sign}${Math.abs(val).toFixed(2)} D`;
 }
 
 function formatDate(isoStr) {
@@ -32,6 +50,28 @@ function formatDate(isoStr) {
   }
 }
 
+function showError(msg) {
+  let errBox = document.getElementById("history-error-banner");
+  if (!errBox) {
+    errBox = document.createElement("div");
+    errBox.id = "history-error-banner";
+    errBox.className = "history-error-banner";
+    errBox.setAttribute("role", "alert");
+    const container = document.querySelector(".history-container");
+    if (container) container.prepend(errBox);
+  }
+  errBox.textContent = msg;
+  errBox.classList.remove("hidden");
+}
+
+function clearError() {
+  const errBox = document.getElementById("history-error-banner");
+  if (errBox) {
+    errBox.textContent = "";
+    errBox.classList.add("hidden");
+  }
+}
+
 export async function loadHistory() {
   const searchInput = document.getElementById("history-search");
   const listContainer = document.getElementById("session-list");
@@ -39,11 +79,12 @@ export async function loadHistory() {
 
   const q = searchInput ? searchInput.value.trim() : "";
   try {
+    clearError();
     const sessions = await getJson(`/api/sessions?q=${encodeURIComponent(q)}&filter=${encodeURIComponent(activeFilter)}`);
     currentSessions = sessions || [];
     renderSessions(currentSessions, q);
   } catch (err) {
-    console.error("Failed to load sessions:", err);
+    showError("Could not load sessions. Please check connection and try again.");
   }
 }
 
@@ -55,9 +96,9 @@ function renderSessions(sessions, searchQuery) {
     if (searchQuery || activeFilter !== "all") {
       listContainer.innerHTML = `
         <div class="history-empty-card" id="history-no-match-card">
-          <h3 class="history-empty-title" data-i18n="history.noMatchTitle">${t("history.noMatchTitle")}</h3>
-          <p class="history-empty-desc" data-i18n="history.noMatchDesc">${t("history.noMatchDesc")}</p>
-          <button type="button" id="btn-clear-search" class="btn btn-secondary" data-i18n="history.clearSearch">${t("history.clearSearch")}</button>
+          <h3 class="history-empty-title" data-i18n="history.noMatchTitle">${escapeHtml(t("history.noMatchTitle"))}</h3>
+          <p class="history-empty-desc" data-i18n="history.noMatchDesc">${escapeHtml(t("history.noMatchDesc"))}</p>
+          <button type="button" id="btn-clear-search" class="btn btn-secondary" data-i18n="history.clearSearch">${escapeHtml(t("history.clearSearch"))}</button>
         </div>
       `;
       const clearBtn = document.getElementById("btn-clear-search");
@@ -73,9 +114,9 @@ function renderSessions(sessions, searchQuery) {
     } else {
       listContainer.innerHTML = `
         <div class="history-empty-card" id="history-empty-card">
-          <h3 class="history-empty-title" data-i18n="history.emptyTitle">${t("history.emptyTitle")}</h3>
-          <p class="history-empty-desc" data-i18n="history.emptyDesc">${t("history.emptyDesc")}</p>
-          <a href="/screen/new" class="btn btn-primary" data-i18n="history.startScreening">${t("history.startScreening")}</a>
+          <h3 class="history-empty-title" data-i18n="history.emptyTitle">${escapeHtml(t("history.emptyTitle"))}</h3>
+          <p class="history-empty-desc" data-i18n="history.emptyDesc">${escapeHtml(t("history.emptyDesc"))}</p>
+          <a href="/screen/new" class="btn btn-primary" data-i18n="history.startScreening">${escapeHtml(t("history.startScreening"))}</a>
         </div>
       `;
     }
@@ -92,26 +133,31 @@ function renderSessions(sessions, searchQuery) {
     
     const eyeSummary = formatEyeSummary(s.eyes);
     const dateFormatted = formatDate(s.created_at);
-    const siteText = s.site ? ` • ${s.site}` : "";
+    const cleanId = escapeHtml(s.id);
+    const cleanCode = escapeHtml(s.participant_code);
+    const cleanSite = s.site ? ` • ${escapeHtml(s.site)}` : "";
+    const cleanHref = `/screen/${encodeURIComponent(s.id)}/result`;
 
     return `
-      <div class="history-item-card" data-id="${s.id}" data-href="/screen/${s.id}/result" role="button" tabindex="0">
-        <div class="history-item-top">
-          <span class="history-code numeric">${s.participant_code}</span>
+      <div class="history-item-card" data-id="${cleanId}" data-href="${cleanHref}" role="button" tabindex="0">
+        <div class="history-code-row">
+          <span class="history-code numeric">${cleanCode}</span>
+        </div>
+        <div class="history-badge-row">
           <span class="badge ${badgeClass}">
             <svg class="icon"><use href="${iconId}"></use></svg>
-            <span>${badgeText}</span>
+            <span>${escapeHtml(badgeText)}</span>
           </span>
         </div>
         <div class="history-meta-row numeric">
-          <span>${dateFormatted}${siteText}</span>
+          <span>${escapeHtml(dateFormatted)}${cleanSite}</span>
         </div>
         <div class="history-eyes-summary">
-          <span>${eyeSummary.od}</span>
-          <span>${eyeSummary.os}</span>
+          <span>${escapeHtml(eyeSummary.od)}</span>
+          <span>${escapeHtml(eyeSummary.os)}</span>
         </div>
         <div class="history-item-actions">
-          <button type="button" class="history-delete-btn" data-id="${s.id}" data-code="${s.participant_code}" aria-label="Delete session ${s.participant_code}">
+          <button type="button" class="history-delete-btn" data-id="${cleanId}" data-code="${cleanCode}" aria-label="Delete session ${cleanCode}">
             <svg class="icon"><use href="#icon-trash-2"></use></svg>
           </button>
         </div>
@@ -192,45 +238,44 @@ function showDetailPanel(sessionId) {
 
   const isRefer = session.referral === true;
   const isNoRefer = session.referral === false;
-  const bannerClass = isRefer ? "referral-banner-refer" : (isNoRefer ? "referral-banner-norefer" : "referral-banner-refer");
+  const bannerBadgeClass = isRefer ? "badge-warn" : (isNoRefer ? "badge-ok" : "badge-warn");
   const bannerIcon = isRefer ? "#icon-alert-triangle" : (isNoRefer ? "#icon-check" : "#icon-alert-triangle");
   const bannerTitle = isRefer ? t("result.refer") : (isNoRefer ? t("result.noRefer") : t("result.incomplete"));
 
   const eyes = session.eyes || {};
-  const formatSeVal = (eye) => {
-    if (!eye || eye.status !== "ok" || eye.se_D === undefined || eye.se_D === null) return "--";
-    const v = Number(eye.se_D);
-    const sign = v < 0 ? "\u2212" : (v > 0 ? "+" : "");
-    return `${sign}${Math.abs(v).toFixed(2)} D`;
-  };
+  const cleanCode = escapeHtml(session.participant_code);
+  const cleanSite = session.site ? ` • ${escapeHtml(session.site)}` : "";
+  const cleanHref = `/screen/${encodeURIComponent(session.id)}/result`;
 
   detailPanel.innerHTML = `
     <div class="card">
       <div class="card-header">
         <h3 class="card-title">
           <svg class="icon icon-teal"><use href="#icon-file-text"></use></svg>
-          <span class="numeric">${session.participant_code}</span>
+          <span class="numeric" id="detail-code">${cleanCode}</span>
         </h3>
-        <span class="numeric detail-meta-date">${formatDate(session.created_at)}</span>
+        <span class="numeric detail-meta-date" id="detail-site">${escapeHtml(formatDate(session.created_at))}${cleanSite}</span>
       </div>
-      <div class="referral-banner ${bannerClass} detail-banner">
-        <svg class="banner-icon"><use href="${bannerIcon}"></use></svg>
-        <div class="banner-text">
-          <div class="banner-title">${bannerTitle}</div>
+      <div class="referral-banner ${bannerBadgeClass} detail-banner">
+        <div class="referral-banner-inner">
+          <svg class="icon"><use href="${bannerIcon}"></use></svg>
+          <div>
+            <div class="referral-banner-title">${escapeHtml(bannerTitle)}</div>
+          </div>
         </div>
       </div>
       <div class="history-detail-grid">
         <div class="detail-eye-box">
           <div class="detail-eye-label">Right Eye (OD)</div>
-          <div class="detail-eye-val numeric">${formatSeVal(eyes.OD)}</div>
+          <div class="detail-eye-val numeric">${escapeHtml(formatEyeVal(eyes.OD))}</div>
         </div>
         <div class="detail-eye-box">
           <div class="detail-eye-label">Left Eye (OS)</div>
-          <div class="detail-eye-val numeric">${formatSeVal(eyes.OS)}</div>
+          <div class="detail-eye-val numeric">${escapeHtml(formatEyeVal(eyes.OS))}</div>
         </div>
       </div>
       <div class="detail-actions">
-        <a href="/screen/${session.id}/result" class="btn btn-primary btn-block">Open full result screen</a>
+        <a href="${cleanHref}" class="btn btn-primary btn-block">Open full result screen</a>
       </div>
     </div>
   `;
@@ -279,12 +324,14 @@ document.addEventListener("DOMContentLoaded", () => {
     confirmDeleteBtn.addEventListener("click", async () => {
       if (!sessionToDelete) return;
       try {
+        clearError();
         await deleteJson(`/api/sessions/${sessionToDelete.id}`);
         deleteModal.classList.add("hidden");
         sessionToDelete = null;
         loadHistory();
       } catch (err) {
-        console.error("Delete failed:", err);
+        deleteModal.classList.add("hidden");
+        showError("Could not delete session. Please try again.");
       }
     });
   }

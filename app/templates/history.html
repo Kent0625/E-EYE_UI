@@ -13,9 +13,12 @@
     </a>
   </div>
 
+  <!-- Error banner -->
+  <div id="history-error-banner" class="history-error-banner hidden" role="alert"></div>
+
   <!-- Search Input -->
   <div class="search-wrapper">
-    <svg class="icon search-icon"><use href="#icon-scan"></use></svg>
+    <svg class="icon search-icon"><use href="#icon-search"></use></svg>
     <input type="text" id="history-search" class="search-input" placeholder="{{ t('history.searchPlaceholder') }}"
            data-i18n="history.searchPlaceholder" aria-label="{{ t('history.searchPlaceholder') }}">
   </div>
@@ -35,8 +38,10 @@
       {% if sessions %}
         {% for s in sessions %}
           <div class="history-item-card" data-id="{{ s.id }}" data-href="/screen/{{ s.id }}/result" role="button" tabindex="0">
-            <div class="history-item-top">
+            <div class="history-code-row">
               <span class="history-code numeric">{{ s.participant_code }}</span>
+            </div>
+            <div class="history-badge-row">
               <span class="badge {% if s.referral == True %}badge-warn{% elif s.referral == False %}badge-ok{% else %}badge-warn{% endif %}">
                 <svg class="icon"><use href="{% if s.referral == True %}#icon-alert-triangle{% elif s.referral == False %}#icon-check{% else %}#icon-alert-triangle{% endif %}"></use></svg>
                 <span>
@@ -54,8 +59,8 @@
               <span>{{ s.created_at[:16] | replace('T', ' ') }}{% if s.site %} &bull; {{ s.site }}{% endif %}</span>
             </div>
             <div class="history-eyes-summary">
-              <span>OD: {% if s.eyes.OD and s.eyes.OD.status == 'ok' and s.eyes.OD.se_D is not none %}{{ "−" if s.eyes.OD.se_D < 0 else ("+" if s.eyes.OD.se_D > 0 else "") }}{{ "%.2f" | format(s.eyes.OD.se_D | abs) }} D{% elif s.eyes.OD and s.eyes.OD.status == 'retake_needed' %}Retake{% else %}--{% endif %}</span>
-              <span>OS: {% if s.eyes.OS and s.eyes.OS.status == 'ok' and s.eyes.OS.se_D is not none %}{{ "−" if s.eyes.OS.se_D < 0 else ("+" if s.eyes.OS.se_D > 0 else "") }}{{ "%.2f" | format(s.eyes.OS.se_D | abs) }} D{% elif s.eyes.OS and s.eyes.OS.status == 'retake_needed' %}Retake{% else %}--{% endif %}</span>
+              <span>OD: {% if s.eyes.OD and s.eyes.OD.status == 'ok' and s.eyes.OD.se_D is not none %}{{ "−" if s.eyes.OD.se_D < 0 else ("+" if s.eyes.OD.se_D > 0 else "") }}{{ "%.2f" | format(s.eyes.OD.se_D | abs) }} D{% elif s.eyes.OD and s.eyes.OD.status == 'retake_needed' %}Retake needed{% else %}Not recorded{% endif %}</span>
+              <span>OS: {% if s.eyes.OS and s.eyes.OS.status == 'ok' and s.eyes.OS.se_D is not none %}{{ "−" if s.eyes.OS.se_D < 0 else ("+" if s.eyes.OS.se_D > 0 else "") }}{{ "%.2f" | format(s.eyes.OS.se_D | abs) }} D{% elif s.eyes.OS and s.eyes.OS.status == 'retake_needed' %}Retake needed{% else %}Not recorded{% endif %}</span>
             </div>
             <div class="history-item-actions">
               <button type="button" class="history-delete-btn" data-id="{{ s.id }}" data-code="{{ s.participant_code }}" aria-label="{{ t('history.deleteAria', code=s.participant_code) }}">

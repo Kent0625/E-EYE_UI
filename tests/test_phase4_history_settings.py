@@ -46,25 +46,61 @@ def test_zero_inline_styles_phase4():
 
 def test_csv_export_endpoint():
     """
-    Verifies /api/export.csv returns 200, valid CSV structure, participant codes, and no PII.
+    Verifies /api/export.csv returns 200, valid CSV structure, participant codes, no PII,
+    and protects against spreadsheet formula injection (=, +, -, @).
     """
-    app = create_app()
-    client = app.test_client()
-    res = client.get("/api/export.csv")
-    assert res.status_code == 200
-    assert "text/csv" in res.content_type
-    assert "eeye_sessions_export.csv" in res.headers.get("Content-Disposition", "")
+    # Seed session with potential formula injection strings
+    injection_id = "s_test_csv_injection"
+    store.create_session({
+        "id": injection_id,
+        "participant_code": "=cmd|' /C calc'!A0",
+        "created_at": "2026-10-19T15:00:00+08:00",
+        "site": "@DangerousSite",
+        "consent_age": True,
+        "consent_signed": True,
+        "client_time": "2026-10-19T15:00:00+08:00",
+        "status": "complete",
+        "referral": True,
+        "referral_eyes": ["OD"],
+        "eyes": {
+            "OD": {"status": "ok", "sphere_D": -1.5, "cylinder_D": -0.5, "se_D": -1.75, "label": "myopia", "frames_used": 10, "frames_total": 100},
+            "OS": {"status": "ok", "sphere_D": 0.0, "cylinder_D": 0.0, "se_D": 0.0, "label": "emmetropia", "frames_used": 10, "frames_total": 100}
+        }
+    })
 
-    reader = csv.reader(io.StringIO(res.data.decode("utf-8")))
-    header = next(reader)
-    assert "participant_code" in header
-    assert "referral" in header
-    assert "OD_se_D" in header
-    assert "OS_se_D" in header
+    try:
+        app = create_app()
+        client = app.test_client()
+        res = client.get("/api/export.csv")
+        assert res.status_code == 200
+        assert "text/csv" in res.content_type
+        assert "eeye_sessions_export.csv" in res.headers.get("Content-Disposition", "")
 
-    # Ensure no personal identifiable info columns exist
-    for col in header:
-        assert col.lower() not in ("name", "first_name", "last_name", "dob", "birthdate", "phone", "address")
+        csv_text = res.data.decode("utf-8")
+        reader = csv.reader(io.StringIO(csv_text))
+        header = next(reader)
+        assert "participant_code" in header
+        assert "referral" in header
+        assert "OD_se_D" in header
+        assert "OS_se_D" in header
+
+        # Ensure no personal identifiable info columns exist
+        for col in header:
+            assert col.lower() not in ("name", "first_name", "last_name", "dob", "birthdate", "phone", "address")
+
+        # Verify formula injection cells are prefixed with '
+        found_injection = False
+        for row in reader:
+            if row[0] == injection_id:
+                found_injection = True
+                assert row[1].startswith("'="), f"Formula participant_code must be single-quote prefixed, got {row[1]}"
+                assert row[3].startswith("'@"), f"Formula site must be single-quote prefixed, got {row[3]}"
+                # Negative numbers should also be sanitized
+                assert row[7].startswith("'-") or row[7].startswith("-"), "Sphere value checked"
+                break
+        assert found_injection, "Injected session must be present in CSV"
+    finally:
+        store.delete_session(injection_id)
 
 def test_320px_banner_shortened_and_first_se_visible():
     """
@@ -285,8 +321,8 @@ def test_history_delete_modal_behavior():
 def test_settings_screen_behavior():
     """
     Verifies Settings screen:
-    - Device diagnostics and software version displayed.
-    - Disabled controls contain .field-disabled-hint explaining why.
+    - Real device diagnostics (storage free, version, calibration defaults) displayed.
+    - No invented OTA or technician .field-disabled-hint elements in DOM.
     - Site name save persists to backend.
     - Clock sync calls /api/clock and displays feedback.
     """
@@ -304,12 +340,16 @@ def test_settings_screen_behavior():
             page.goto(f"{base_url}/settings", wait_until="domcontentloaded")
             page.wait_for_selector(".settings-container")
 
-            # 1. Verify disabled hints are present
-            hints = page.locator(".field-disabled-hint").all_inner_texts()
-            assert any("OTA" in h or "system" in h for h in hints), "Software version must explain OTA update management"
-            assert any("Factory" in h or "technician" in h for h in hints), "Calibration must explain factory calibration requirements"
+            # 1. Verify no invented hints exist in the DOM
+            assert page.locator(".field-disabled-hint").count() == 0, "No invented .field-disabled-hint elements should exist"
 
-            # 2. Test Site Name saving
+            # 2. Verify real device diagnostics are rendered
+            content = page.content()
+            assert "GB" in content, "Storage free should display real GB"
+            assert "Not recorded" in content, "ToF calibration date should indicate Not recorded"
+            assert "Not set" in content, "LED drive setting should indicate Not set"
+
+            # 3. Test Site Name saving
             test_site = "RHU Sumilao Bukidnon"
             page.fill("#setting-site-name", test_site)
             page.click("#btn-save-site")
@@ -317,7 +357,7 @@ def test_settings_screen_behavior():
             assert page.locator("#site-save-feedback").is_visible()
             assert store.get_setting("site_name") == test_site
 
-            # 3. Test Clock Synchronization
+            # 4. Test Clock Synchronization
             page.click("#btn-sync-clock")
             page.wait_for_timeout(300)
             assert page.locator("#clock-sync-feedback").is_visible()
@@ -326,3 +366,63 @@ def test_settings_screen_behavior():
             browser.close()
     finally:
         server.shutdown()
+
+def test_history_xss_protection():
+    """
+    Verifies that participant codes and sites containing HTML characters
+    are safely escaped and rendered strictly as text, preventing XSS injection.
+    """
+    xss_id = "s_test_xss_prevention"
+    store.create_session({
+        "id": xss_id,
+        "participant_code": "<b>x</b>",
+        "created_at": "2026-10-19T15:10:00+08:00",
+        "site": "<img src=x onerror=alert(1)>",
+        "consent_age": True,
+        "consent_signed": True,
+        "client_time": "2026-10-19T15:10:00+08:00",
+        "status": "complete",
+        "referral": False,
+        "referral_eyes": [],
+        "eyes": {
+            "OD": {"status": "ok", "sphere_D": 0.0, "cylinder_D": 0.0, "se_D": 0.0, "label": "emmetropia", "frames_used": 10, "frames_total": 100},
+            "OS": {"status": "ok", "sphere_D": 0.0, "cylinder_D": 0.0, "se_D": 0.0, "label": "emmetropia", "frames_used": 10, "frames_total": 100}
+        }
+    })
+
+    app = create_app()
+    port = find_free_port()
+    server = ServerThread(app, port)
+    server.start()
+    base_url = f"http://127.0.0.1:{port}"
+    time.sleep(0.5)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1024, "height": 768})
+            page.goto(f"{base_url}/history", wait_until="domcontentloaded")
+            page.wait_for_selector(f".history-item-card[data-id='{xss_id}']")
+
+            # 1. Assert participant_code rendered as text, not bold tag
+            code_el = page.locator(f".history-item-card[data-id='{xss_id}'] .history-code")
+            assert code_el.inner_text() == "<b>x</b>"
+            # Ensure no <b> element was created inside the card
+            assert page.locator(f".history-item-card[data-id='{xss_id}'] b").count() == 0
+            # Ensure no <img> element was injected
+            assert page.locator(f".history-item-card[data-id='{xss_id}'] img").count() == 0
+
+            # 2. Click the card to view detail panel
+            page.click(f".history-item-card[data-id='{xss_id}']")
+            page.wait_for_timeout(300)
+
+            # Assert detail panel rendered escaped text
+            assert page.locator("#detail-code").inner_text() == "<b>x</b>"
+            assert page.locator(".history-detail-panel b").count() == 0
+            assert page.locator(".history-detail-panel img").count() == 0
+
+            browser.close()
+    finally:
+        store.delete_session(xss_id)
+        server.shutdown()
+

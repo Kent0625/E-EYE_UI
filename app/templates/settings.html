@@ -7,7 +7,7 @@
       <svg class="icon icon-teal"><use href="#icon-settings"></use></svg>
       <span data-i18n="settings.title">{{ t('settings.title') }}</span>
     </h2>
-    {% if mock_mode %}
+    {% if settings_data.mock_mode %}
       <span class="badge badge-warn" data-i18n="app.mock">MOCK DATA</span>
     {% endif %}
   </div>
@@ -19,12 +19,12 @@
       <span data-i18n="settings.siteName">{{ t('settings.siteName') }}</span>
     </h3>
     <div class="settings-field-group">
-      <label for="setting-site-name" class="label" data-i18n="settings.siteName">{{ t('settings.siteName') }}</label>
       <div class="settings-save-row">
         <input type="text" id="setting-site-name" class="settings-input"
                value="{{ settings_data.site_name or '' }}"
                placeholder="{{ t('settings.sitePlaceholder') }}"
-               data-i18n="settings.sitePlaceholder">
+               data-i18n="settings.sitePlaceholder"
+               aria-label="{{ t('settings.siteName') }}">
         <button type="button" id="btn-save-site" class="btn btn-secondary" data-i18n="settings.saveSite">
           {{ t('settings.saveSite') }}
         </button>
@@ -32,6 +32,7 @@
       <div id="site-save-feedback" class="settings-feedback hidden" data-i18n="settings.siteSaved">
         {{ t('settings.siteSaved') }}
       </div>
+      <div id="site-save-error" class="settings-error-text hidden" role="alert"></div>
     </div>
   </div>
 
@@ -55,12 +56,7 @@
         <strong class="numeric" id="set-ip">{{ settings_data.ip }}</strong>
       </div>
       <div class="status-item">
-        <div>
-          <span data-i18n="settings.version">{{ t('settings.version') }}</span>
-          <div class="field-disabled-hint" data-i18n="settings.disabledVersionHint">
-            {{ t('settings.disabledVersionHint') }}
-          </div>
-        </div>
+        <span data-i18n="settings.version">{{ t('settings.version') }}</span>
         <strong class="numeric">{{ settings_data.software_version }}</strong>
       </div>
       <div class="status-item">
@@ -84,6 +80,7 @@
     <div id="clock-sync-feedback" class="clock-status-box ok hidden" data-i18n="settings.clockSynced">
       {{ t('settings.clockSynced') }}
     </div>
+    <div id="clock-sync-error" class="settings-error-text hidden" role="alert"></div>
     <button type="button" id="btn-sync-clock" class="btn btn-secondary btn-block" data-i18n="settings.clockSync">
       <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
       <span>{{ t('settings.clockSync') }}</span>
@@ -106,24 +103,6 @@
         <strong class="numeric">{{ settings_data.led_drive_setting }}</strong>
       </div>
     </div>
-    <div class="field-disabled-hint" data-i18n="settings.disabledCalHint">
-      {{ t('settings.disabledCalHint') }}
-    </div>
-  </div>
-
-  <!-- Research Mode Toggle Card -->
-  <div class="card">
-    <h3 class="card-title settings-section-title">
-      <svg class="icon icon-teal"><use href="#icon-file-text"></use></svg>
-      <span data-i18n="settings.researchMode">{{ t('settings.researchMode') }}</span>
-    </h3>
-    <label class="toggle-label" for="toggle-research-mode">
-      <input type="checkbox" id="toggle-research-mode" class="toggle-checkbox" {% if settings_data.research_mode %}checked{% endif %}>
-      <div>
-        <div class="toggle-title" data-i18n="settings.researchMode">{{ t('settings.researchMode') }}</div>
-        <div class="toggle-desc" data-i18n="settings.researchModeDesc">{{ t('settings.researchModeDesc') }}</div>
-      </div>
-    </label>
   </div>
 
   <!-- Data Management Card -->
@@ -144,6 +123,7 @@
       <div id="data-delete-feedback" class="settings-feedback hidden">
         All session data deleted.
       </div>
+      <div id="data-delete-error" class="settings-error-text hidden" role="alert"></div>
     </div>
   </div>
 

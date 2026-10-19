@@ -9,8 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const siteFeedback = document.getElementById("site-save-feedback");
 
   if (btnSaveSite && siteInput) {
+    const siteError = document.getElementById("site-save-error");
     btnSaveSite.addEventListener("click", async () => {
       const siteName = siteInput.value.trim();
+      if (siteError) siteError.classList.add("hidden");
       try {
         await postJson("/api/settings", { site_name: siteName });
         if (siteFeedback) {
@@ -21,6 +23,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } catch (err) {
         console.error("Failed to save site name:", err);
+        if (siteError) {
+          siteError.textContent = err.message || "Failed to save site name. Please try again.";
+          siteError.classList.remove("hidden");
+        }
       }
     });
   }
@@ -29,9 +35,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnSyncClock = document.getElementById("btn-sync-clock");
   const clockWarning = document.getElementById("clock-warning");
   const clockFeedback = document.getElementById("clock-sync-feedback");
+  const clockError = document.getElementById("clock-sync-error");
 
   if (btnSyncClock) {
     btnSyncClock.addEventListener("click", async () => {
+      if (clockError) clockError.classList.add("hidden");
       try {
         const clientIso = new Date().toISOString();
         await postJson("/api/clock", { iso_timestamp: clientIso });
@@ -46,6 +54,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } catch (err) {
         console.error("Failed to sync clock:", err);
+        if (clockError) {
+          clockError.textContent = err.message || "Failed to synchronize clock. Please try again.";
+          clockError.classList.remove("hidden");
+        }
       }
     });
   }
@@ -88,8 +100,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnConfirmDeleteAll = document.getElementById("btn-confirm-delete-all");
   const dataFeedback = document.getElementById("data-delete-feedback");
 
+  const dataError = document.getElementById("data-delete-error");
+
   if (btnDeleteAll && deleteAllModal) {
     btnDeleteAll.addEventListener("click", () => {
+      if (dataError) dataError.classList.add("hidden");
       deleteAllModal.classList.remove("hidden");
       if (btnCancelDeleteAll) btnCancelDeleteAll.focus();
     });
@@ -103,6 +118,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (btnConfirmDeleteAll && deleteAllModal) {
     btnConfirmDeleteAll.addEventListener("click", async () => {
+      if (dataError) dataError.classList.add("hidden");
       try {
         await postJson("/api/sessions/delete-all", {});
         deleteAllModal.classList.add("hidden");
@@ -114,6 +130,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } catch (err) {
         console.error("Failed to delete all sessions:", err);
+        deleteAllModal.classList.add("hidden");
+        if (dataError) {
+          dataError.textContent = err.message || "Failed to delete sessions. Please try again.";
+          dataError.classList.remove("hidden");
+        }
       }
     });
   }

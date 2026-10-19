@@ -1,7 +1,11 @@
 import os
 import json
 from flask import Flask, render_template, redirect, url_for, request
-from app.config import MOCK_MODE, MEDIA_FOLDER, SOFTWARE_VERSION, DEVICE_NAME, DEVICE_SSID, DEVICE_IP, BASE_DIR
+from app.config import (
+    MOCK_MODE, MEDIA_FOLDER, SOFTWARE_VERSION, DEVICE_NAME,
+    DEVICE_SSID, DEVICE_IP, BASE_DIR, get_storage_free_str,
+    TOF_CALIBRATED_DATE, LED_DRIVE_SETTING
+)
 from app import store
 from app.api import api_bp
 from app.mock.fixtures import seed_fixtures_if_empty
@@ -105,12 +109,13 @@ def create_app():
             "device_name": DEVICE_NAME,
             "ssid": DEVICE_SSID,
             "ip": DEVICE_IP,
-            "storage_free_gb": "18.4 GB",
+            "storage_free_gb": get_storage_free_str(),
             "software_version": SOFTWARE_VERSION,
             "site_name": store.get_setting("site_name", ""),
             "clock_set": store.get_setting("clock_set", "1") == "1",
-            "tof_calibrated_date": "2026-09-15",
-            "led_drive_setting": "50 mA (IR 850 nm)"
+            "tof_calibrated_date": TOF_CALIBRATED_DATE or "Not recorded",
+            "led_drive_setting": LED_DRIVE_SETTING or "Not set",
+            "mock_mode": MOCK_MODE
         }
         return render_template("settings.html", active_nav="settings", settings_data=settings_data)
     
