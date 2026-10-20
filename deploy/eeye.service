@@ -1,0 +1,22 @@
+[Unit]
+Description=E-Eye Photorefractor Operator Web Interface
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/E-EYE_UI
+Environment="PATH=/home/pi/E-EYE_UI/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+Environment="MOCK_MODE=0"
+ExecStart=/home/pi/E-EYE_UI/.venv/bin/gunicorn -c deploy/gunicorn.conf.py app.app:app
+Restart=always
+RestartSec=3s
+KillSignal=SIGTERM
+TimeoutStopSec=10
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

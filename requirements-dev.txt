@@ -1,0 +1,6 @@
+# Development and test dependencies for E-Eye UI (pinned)
+pytest==9.0.2
+playwright==1.63.0
+brotli==1.2.0
+fonttools==4.60.1
+Pillow==10.4.0

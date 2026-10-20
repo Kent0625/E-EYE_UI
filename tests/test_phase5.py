@@ -162,6 +162,8 @@ def test_compute_se_on_ground_truth_api():
     strictly using compute_se.
     """
     test_id = "s_test_gt_compute_se"
+    orig_mode = store.get_setting("research_mode", "0")
+    store.set_setting("research_mode", "1")
     store.create_session({
         "id": test_id,
         "participant_code": "EE-GT-001",
@@ -210,6 +212,7 @@ def test_compute_se_on_ground_truth_api():
         assert os_gt["se_D"] == compute_se(0.25, -0.50)
         assert os_gt["se_D"] == 0.00
     finally:
+        store.set_setting("research_mode", orig_mode)
         store.delete_session(test_id)
 
 def test_research_mode_toggle_and_result_screen_behavior():

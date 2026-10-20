@@ -1,6 +1,7 @@
 import io
 import csv
 import json
+import math
 import time
 from datetime import datetime
 from flask import Blueprint, jsonify, request, Response, send_from_directory
@@ -189,8 +190,31 @@ def delete_session_endpoint(id):
         return jsonify({"error": "Session not found"}), 404
     return jsonify({"success": True, "id": id})
 
+def parse_diopter(val):
+    """
+    Parses and validates diopter input:
+    - Rejects blank/None values
+    - Rejects non-numeric text
+    - Rejects NaN/Infinity
+    - Validates physiological autorefractor measurement range [-20.0, +20.0] D
+    """
+    if val is None or val == "":
+        raise ValueError("Diopter value cannot be blank")
+    try:
+        num = float(val)
+    except (ValueError, TypeError):
+        raise ValueError("Diopter value must be numeric")
+    if math.isnan(num) or math.isinf(num):
+        raise ValueError("Diopter value cannot be NaN or Inf")
+    if num < -20.0 or num > 20.0:
+        raise ValueError("Diopter value out of range [-20.0, +20.0] D")
+    return num
+
 @api_bp.route("/api/sessions/<id>/ground-truth", methods=["POST"])
 def update_ground_truth(id):
+    if store.get_setting("research_mode", "0") != "1":
+        return jsonify({"error": "Research mode is disabled"}), 403
+
     session = store.get_session(id)
     if not session:
         return jsonify({"error": "Session not found"}), 404
@@ -202,8 +226,12 @@ def update_ground_truth(id):
         eye = data.get("eye")  # "OD" or "OS"
         if eye not in ("OD", "OS"):
             return jsonify({"error": "Invalid eye"}), 400
-        sph = float(data.get("sphere_D", 0.0))
-        cyl = float(data.get("cylinder_D", 0.0))
+        try:
+            sph = parse_diopter(data.get("sphere_D"))
+            cyl = parse_diopter(data.get("cylinder_D"))
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
         eye_data = eyes.get(eye, {})
         eye_data["ground_truth"] = {
             "sphere_D": sph,
@@ -212,11 +240,19 @@ def update_ground_truth(id):
         }
         eyes[eye] = eye_data
     else:
+        has_entry = False
         for eye_key in ("OD", "OS"):
             if eye_key in data:
+                has_entry = True
                 e_data = data[eye_key]
-                sph = float(e_data.get("sphere_D", 0.0))
-                cyl = float(e_data.get("cylinder_D", 0.0))
+                if not isinstance(e_data, dict):
+                    return jsonify({"error": f"{eye_key} payload must be an object"}), 400
+                try:
+                    sph = parse_diopter(e_data.get("sphere_D"))
+                    cyl = parse_diopter(e_data.get("cylinder_D"))
+                except ValueError as e:
+                    return jsonify({"error": str(e)}), 400
+
                 eye_data = eyes.get(eye_key, {})
                 eye_data["ground_truth"] = {
                     "sphere_D": sph,
@@ -224,6 +260,9 @@ def update_ground_truth(id):
                     "se_D": compute_se(sph, cyl)
                 }
                 eyes[eye_key] = eye_data
+        
+        if not has_entry:
+            return jsonify({"error": "No valid ground truth data provided"}), 400
 
     updated = store.update_session(id, eyes=eyes)
     return jsonify(updated)

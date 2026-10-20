@@ -39,6 +39,7 @@ screenshots/
 
 # Private manuscripts, feedback documents, and audio recordings
 *.pdf
+!docs/phase6/*.pdf
 *.docx
 *.mp3
 *.wav
