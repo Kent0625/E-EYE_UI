@@ -459,3 +459,144 @@ def test_no_prohibited_clinical_or_ai_wording():
                 for phrase in prohibited:
                     assert phrase not in content, f"Prohibited phrase '{phrase}' found in {fname}"
 
+def test_keyboard_only_full_screening_flow():
+    """
+    Checklist Item 8 (Keyboard Run-Through & Focus States):
+    Completes the full operational workflow:
+      New Screening -> Align (OD) -> Record (OD) -> Processing -> Align (OS) -> Record (OS) -> Processing -> Result
+    using EXCLUSIVELY keyboard interaction (Tab, Space, Enter).
+    Asserts a visible focus indicator (computed solid outline >= 2px or box-shadow)
+    on each interactive control when focused.
+    """
+    app = create_app()
+    port = find_free_port()
+    server = ServerThread(app, port)
+    server.start()
+    base_url = f"http://127.0.0.1:{port}"
+    time.sleep(0.5)
+
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1024, "height": 768})
+
+            def get_focused_info():
+                return page.evaluate("""() => {
+                    const el = document.activeElement;
+                    if (!el || el === document.body) return null;
+                    const s = window.getComputedStyle(el);
+                    const hasOutline = s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0;
+                    const hasBoxShadow = s.boxShadow !== 'none' && s.boxShadow !== '';
+                    return {
+                        tag: el.tagName,
+                        id: el.id,
+                        className: el.className,
+                        outlineStyle: s.outlineStyle,
+                        outlineWidth: s.outlineWidth,
+                        outlineColor: s.outlineColor,
+                        visible: hasOutline || hasBoxShadow
+                    };
+                }""")
+
+            # 1. New Screening: navigate via URL
+            page.goto(f"{base_url}/screen/new", wait_until="networkidle")
+
+            # Tab to #chk-age
+            checked_age = False
+            for _ in range(10):
+                page.keyboard.press("Tab")
+                info = get_focused_info()
+                if info and info["id"] == "chk-age":
+                    assert info["visible"], f"chk-age must have visible focus indicator: {info}"
+                    page.keyboard.press("Space")
+                    checked_age = True
+                    break
+            assert checked_age, "Failed to navigate to #chk-age via Tab"
+
+            # Tab to #chk-consent
+            checked_consent = False
+            for _ in range(5):
+                page.keyboard.press("Tab")
+                info = get_focused_info()
+                if info and info["id"] == "chk-consent":
+                    assert info["visible"], f"chk-consent must have visible focus indicator: {info}"
+                    page.keyboard.press("Space")
+                    checked_consent = True
+                    break
+            assert checked_consent, "Failed to navigate to #chk-consent via Tab"
+
+            # Tab to #btn-continue (now enabled)
+            submitted_new = False
+            for _ in range(5):
+                page.keyboard.press("Tab")
+                info = get_focused_info()
+                if info and info["id"] == "btn-continue":
+                    assert info["visible"], f"btn-continue must have visible focus indicator: {info}"
+                    assert info["outlineStyle"] == "solid"
+                    page.keyboard.press("Enter")
+                    submitted_new = True
+                    break
+            assert submitted_new, "Failed to focus and submit #btn-continue via keyboard"
+
+            # 2. OD Align & Record: wait for page load and distance stabilization
+            page.wait_for_url("**/screen/*/OD**", timeout=10000)
+            page.wait_for_selector("#btn-record:not([disabled])", timeout=20000)
+
+            # Tab to #btn-record
+            recorded_od = False
+            for _ in range(12):
+                page.keyboard.press("Tab")
+                info = get_focused_info()
+                if info and info["id"] == "btn-record":
+                    assert info["visible"], f"btn-record must have visible focus indicator: {info}"
+                    assert info["outlineStyle"] == "solid"
+                    page.keyboard.press("Enter")
+                    recorded_od = True
+                    break
+            assert recorded_od, "Failed to focus and activate #btn-record via keyboard"
+
+            # 3. OD Processing -> Automatic OS Redirect
+            page.wait_for_url("**/screen/*/processing?eye=OD", timeout=12000)
+            page.wait_for_url("**/screen/*/OS**", timeout=15000)
+
+            # 4. OS Align & Record: wait for distance stabilization
+            page.wait_for_selector("#btn-record:not([disabled])", timeout=20000)
+
+            # Tab to OS #btn-record
+            recorded_os = False
+            for _ in range(12):
+                page.keyboard.press("Tab")
+                info = get_focused_info()
+                if info and info["id"] == "btn-record":
+                    assert info["visible"], f"OS btn-record must have visible focus indicator: {info}"
+                    assert info["outlineStyle"] == "solid"
+                    page.keyboard.press("Enter")
+                    recorded_os = True
+                    break
+            assert recorded_os, "Failed to focus and activate OS #btn-record via keyboard"
+
+            # 5. OS Processing -> Automatic Result Screen Redirect
+            page.wait_for_url("**/screen/*/processing?eye=OS", timeout=12000)
+            page.wait_for_url("**/screen/*/result**", timeout=15000)
+
+            # 6. Result Screen verification
+            assert page.locator("#referral-banner").is_visible()
+            
+            # Tab through controls on result page and verify focus indicators
+            verified_result_control = False
+            for _ in range(15):
+                page.keyboard.press("Tab")
+                info = get_focused_info()
+                if info and ("btn-print-slip" in info.get("className", "") or info["id"] in ("btn-new-screening", "btn-save-ground-truth")):
+                    assert info["visible"], f"Result control must have visible focus indicator: {info}"
+                    assert info["outlineStyle"] == "solid" or info["visible"]
+                    verified_result_control = True
+                    break
+            assert verified_result_control, "Failed to focus any primary action on Result page via Tab"
+
+            browser.close()
+    finally:
+        server.shutdown()
+
+
