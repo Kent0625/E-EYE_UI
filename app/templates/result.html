@@ -101,6 +101,10 @@
 </div>
 
 <div class="result-actions">
+  <button type="button" class="btn btn-secondary btn-block btn-print-slip" data-i18n="result.printSlip">
+    <svg class="icon"><use href="#icon-printer"></use></svg>
+    <span>{{ t('result.printSlip') }}</span>
+  </button>
   <a href="/screen/new" class="btn btn-primary btn-block" data-i18n="result.newScreening">
     <svg class="icon"><use href="#icon-plus"></use></svg>
     <span>{{ t('result.newScreening') }}</span>
@@ -110,6 +114,88 @@
     <span>{{ t('result.viewHistory') }}</span>
   </a>
 </div>
+{% endmacro %}
+
+{% macro render_ground_truth(s, od, os_eye) %}
+{% if research_mode %}
+<div class="card ground-truth-card" id="ground-truth-section">
+  <div class="card-header">
+    <h3 class="card-title">
+      <svg class="icon icon-teal"><use href="#icon-file-text"></use></svg>
+      <span data-i18n="result.groundTruth">{{ t('result.groundTruth') }}</span>
+    </h3>
+    <span class="badge badge-warn" data-i18n="app.mock">RESEARCH</span>
+  </div>
+  
+  <p class="form-hint">
+    Enter paired autorefractor measurements to evaluate mean absolute error (MAE).
+  </p>
+
+  <form id="form-ground-truth" data-session-id="{{ s.id }}">
+    <div class="ground-truth-grid">
+      <!-- Right Eye (OD) Ground Truth -->
+      <div class="ground-truth-eye-box">
+        <div class="ground-truth-eye-title">
+          <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
+          <span data-i18n="result.od">Right eye (OD)</span>
+        </div>
+        <div class="gt-inputs-row">
+          <div class="gt-input-group">
+            <label for="gt-od-sphere" class="gt-label" data-i18n="result.sphere">Sphere (D)</label>
+            <input type="number" step="0.25" id="gt-od-sphere" name="od_sphere" class="numeric gt-input"
+                   placeholder="0.00" value="{{ od.ground_truth.sphere_D if (od and od.ground_truth and od.ground_truth.sphere_D is not none) else '' }}">
+          </div>
+          <div class="gt-input-group">
+            <label for="gt-od-cylinder" class="gt-label" data-i18n="result.cylinder">Cylinder (D)</label>
+            <input type="number" step="0.25" id="gt-od-cylinder" name="od_cylinder" class="numeric gt-input"
+                   placeholder="0.00" value="{{ od.ground_truth.cylinder_D if (od and od.ground_truth and od.ground_truth.cylinder_D is not none) else '' }}">
+          </div>
+        </div>
+        <div class="gt-computed-se numeric" id="gt-od-se-display">
+          {% if od and od.ground_truth and od.ground_truth.se_D is not none %}
+            <span data-i18n="result.groundTruthSe">{{ t('result.groundTruthSe') }}</span>: {{ "−" if od.ground_truth.se_D < 0 else ("+" if od.ground_truth.se_D > 0 else "") }}{{ "%.2f" | format(od.ground_truth.se_D | abs) }} D
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Left Eye (OS) Ground Truth -->
+      <div class="ground-truth-eye-box">
+        <div class="ground-truth-eye-title">
+          <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
+          <span data-i18n="result.os">Left eye (OS)</span>
+        </div>
+        <div class="gt-inputs-row">
+          <div class="gt-input-group">
+            <label for="gt-os-sphere" class="gt-label" data-i18n="result.sphere">Sphere (D)</label>
+            <input type="number" step="0.25" id="gt-os-sphere" name="os_sphere" class="numeric gt-input"
+                   placeholder="0.00" value="{{ os_eye.ground_truth.sphere_D if (os_eye and os_eye.ground_truth and os_eye.ground_truth.sphere_D is not none) else '' }}">
+          </div>
+          <div class="gt-input-group">
+            <label for="gt-os-cylinder" class="gt-label" data-i18n="result.cylinder">Cylinder (D)</label>
+            <input type="number" step="0.25" id="gt-os-cylinder" name="os_cylinder" class="numeric gt-input"
+                   placeholder="0.00" value="{{ os_eye.ground_truth.cylinder_D if (os_eye and os_eye.ground_truth and os_eye.ground_truth.cylinder_D is not none) else '' }}">
+          </div>
+        </div>
+        <div class="gt-computed-se numeric" id="gt-os-se-display">
+          {% if os_eye and os_eye.ground_truth and os_eye.ground_truth.se_D is not none %}
+            <span data-i18n="result.groundTruthSe">{{ t('result.groundTruthSe') }}</span>: {{ "−" if os_eye.ground_truth.se_D < 0 else ("+" if os_eye.ground_truth.se_D > 0 else "") }}{{ "%.2f" | format(os_eye.ground_truth.se_D | abs) }} D
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="gt-actions-row">
+      <button type="submit" id="btn-save-ground-truth" class="btn btn-secondary btn-block" data-i18n="result.saveGroundTruth">
+        <svg class="icon"><use href="#icon-check"></use></svg>
+        <span>{{ t('result.saveGroundTruth') }}</span>
+      </button>
+      <div id="gt-save-feedback" class="gt-feedback hidden" data-i18n="result.groundTruthSaved">
+        {{ t('result.groundTruthSaved') }}
+      </div>
+    </div>
+  </form>
+</div>
+{% endif %}
 {% endmacro %}
 
 {% block content %}
@@ -202,6 +288,9 @@
         {{ render_eye_card('OS', os_eye, s.id if s else '') }}
       </div>
 
+      <!-- Ground Truth Section (Rendered when Research Mode is enabled) -->
+      {{ render_ground_truth(s, od, os_eye) }}
+
       <!-- Mobile/Tablet Metadata & Actions (hidden >= 1024px) -->
       <div class="result-mobile-bottom-panel">
         {{ render_meta_and_actions(s, od, os_eye) }}
@@ -209,4 +298,70 @@
     </main>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module">
+  import { postJson } from "{{ url_for('static', filename='js/api.js') }}";
+  import { t } from "{{ url_for('static', filename='js/i18n.js') }}";
+
+  // Print slip action
+  document.querySelectorAll(".btn-print-slip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      window.print();
+    });
+  });
+
+  // Ground truth saving (Research mode)
+  const gtForm = document.getElementById("form-ground-truth");
+  const gtFeedback = document.getElementById("gt-save-feedback");
+  const odSeDisplay = document.getElementById("gt-od-se-display");
+  const osSeDisplay = document.getElementById("gt-os-se-display");
+
+  if (gtForm) {
+    gtForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const sessionId = gtForm.getAttribute("data-session-id");
+      const odSph = document.getElementById("gt-od-sphere")?.value;
+      const odCyl = document.getElementById("gt-od-cylinder")?.value;
+      const osSph = document.getElementById("gt-os-sphere")?.value;
+      const osCyl = document.getElementById("gt-os-cylinder")?.value;
+
+      const payload = {};
+      if (odSph !== "" && odCyl !== "") {
+        payload.OD = { sphere_D: parseFloat(odSph), cylinder_D: parseFloat(odCyl) };
+      }
+      if (osSph !== "" && osCyl !== "") {
+        payload.OS = { sphere_D: parseFloat(osSph), cylinder_D: parseFloat(osCyl) };
+      }
+
+      try {
+        const res = await postJson(`/api/sessions/${sessionId}/ground-truth`, payload);
+        if (gtFeedback) {
+          gtFeedback.classList.remove("hidden");
+          setTimeout(() => gtFeedback.classList.add("hidden"), 3500);
+        }
+
+        const eyes = res.eyes || {};
+        if (eyes.OD && eyes.OD.ground_truth && eyes.OD.ground_truth.se_D !== null && eyes.OD.ground_truth.se_D !== undefined) {
+          const se = eyes.OD.ground_truth.se_D;
+          const sign = se < 0 ? "−" : (se > 0 ? "+" : "");
+          if (odSeDisplay) {
+            odSeDisplay.textContent = `${t("result.groundTruthSe")}: ${sign}${Math.abs(se).toFixed(2)} D`;
+          }
+        }
+
+        if (eyes.OS && eyes.OS.ground_truth && eyes.OS.ground_truth.se_D !== null && eyes.OS.ground_truth.se_D !== undefined) {
+          const se = eyes.OS.ground_truth.se_D;
+          const sign = se < 0 ? "−" : (se > 0 ? "+" : "");
+          if (osSeDisplay) {
+            osSeDisplay.textContent = `${t("result.groundTruthSe")}: ${sign}${Math.abs(se).toFixed(2)} D`;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to save ground truth:", err);
+      }
+    });
+  }
+</script>
 {% endblock %}

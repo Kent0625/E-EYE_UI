@@ -3,60 +3,60 @@
 {% block body_class %}flow-screen{% endblock %}
 
 {% block content %}
-<div class="processing-container" style="max-width: 540px; margin: 40px auto; text-align: center;">
-  <div class="card" style="padding: 32px 24px;">
+<div class="processing-container">
+  <div class="card processing-card">
     <!-- Normal Processing Pipeline -->
     <div id="processing-view">
-      <div style="margin-bottom: 24px;">
-        <svg class="icon" style="width: 48px; height: 48px; color: var(--teal-600); animation: spin 1.2s linear infinite;"><use href="#icon-refresh-cw"></use></svg>
+      <div class="processing-spinner-wrapper">
+        <svg class="icon spinner-icon"><use href="#icon-refresh-cw"></use></svg>
       </div>
 
-      <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;" data-i18n="processing.title">
+      <h2 class="processing-title" data-i18n="processing.title">
         Processing
       </h2>
 
       <!-- Deterministic Step Checklist -->
-      <div style="display: flex; flex-direction: column; gap: 14px; text-align: left; margin-bottom: 24px;">
-        <div id="step-extracting" class="status-item" style="border-left: 4px solid var(--border);">
+      <div class="processing-steps">
+        <div id="step-extracting" class="status-item processing-step">
           <span data-i18n="processing.step.extracting">Extracting frames</span>
-          <span class="step-status"><svg class="icon" style="width: 16px; height: 16px; color: var(--text-muted);"><use href="#icon-clock"></use></svg></span>
+          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
         </div>
 
-        <div id="step-quality" class="status-item" style="border-left: 4px solid var(--border);">
+        <div id="step-quality" class="status-item processing-step">
           <span data-i18n="processing.step.quality">Checking frame quality</span>
-          <span class="step-status"><svg class="icon" style="width: 16px; height: 16px; color: var(--text-muted);"><use href="#icon-clock"></use></svg></span>
+          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
         </div>
 
-        <div id="step-features" class="status-item" style="border-left: 4px solid var(--border);">
+        <div id="step-features" class="status-item processing-step">
           <span data-i18n="processing.step.features">Computing pupil crescent features</span>
-          <span class="step-status"><svg class="icon" style="width: 16px; height: 16px; color: var(--text-muted);"><use href="#icon-clock"></use></svg></span>
+          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
         </div>
 
-        <div id="step-refraction" class="status-item" style="border-left: 4px solid var(--border);">
+        <div id="step-refraction" class="status-item processing-step">
           <span data-i18n="processing.step.refraction">Estimating refraction</span>
-          <span class="step-status"><svg class="icon" style="width: 16px; height: 16px; color: var(--text-muted);"><use href="#icon-clock"></use></svg></span>
+          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
         </div>
       </div>
     </div>
 
     <!-- Retake Fallback State (< 10 valid frames) -->
-    <div id="retake-view" style="display: none; text-align: left;">
-      <div style="display: flex; align-items: center; gap: 10px; color: var(--warn-text); margin-bottom: 16px;">
-        <svg class="icon" style="width: 28px; height: 28px;"><use href="#icon-alert-triangle"></use></svg>
-        <h2 style="font-size: 18px; font-weight: 700;" data-i18n="retake.title">Not enough clear frames. Retake this eye.</h2>
+    <div id="retake-view" class="retake-view hidden">
+      <div class="retake-header">
+        <svg class="icon icon-lg"><use href="#icon-alert-triangle"></use></svg>
+        <h2 class="retake-title" data-i18n="retake.title">Not enough clear frames. Retake this eye.</h2>
       </div>
 
-      <div class="offline-banner" style="margin-bottom: 20px;">
+      <div class="offline-banner">
         <p data-i18n="retake.reasons">
           Likely causes: blinking during capture, head movement, or distance drifted outside 10.0 to 15.0 cm.
         </p>
       </div>
 
-      <div class="sticky-action-bar" style="display: flex; gap: 10px;">
-        <button type="button" id="btn-retake" class="btn btn-primary" style="flex: 1; min-height: 48px;" data-i18n="retake.btn">
+      <div class="sticky-action-bar retake-actions">
+        <button type="button" id="btn-retake" class="btn btn-primary btn-flex" data-i18n="retake.btn">
           Retake this eye
         </button>
-        <button type="button" id="btn-skip-eye" class="btn btn-secondary" style="flex: 1; min-height: 48px;" data-i18n="retake.skip">
+        <button type="button" id="btn-skip-eye" class="btn btn-secondary btn-flex" data-i18n="retake.skip">
           Skip this eye
         </button>
       </div>
@@ -85,16 +85,21 @@
       const data = JSON.parse(e.data);
       if (data.step && stepElements[data.step]) {
         const el = stepElements[data.step];
-        el.style.borderLeftColor = "var(--teal-600)";
-        el.querySelector(".step-status").innerHTML = `<svg class="icon" style="width: 16px; height: 16px; color: var(--teal-600);"><use href="#icon-check"></use></svg>`;
+        el.classList.add("complete");
+        const statusSpan = el.querySelector(".step-status");
+        if (statusSpan) {
+          statusSpan.innerHTML = `<svg class="icon step-status-icon-complete"><use href="#icon-check"></use></svg>`;
+        }
       }
       
       if (data.done) {
         evtSource.close();
         // Check if we need retake (simulate only if session is s_mock_retake and eye is OS)
         if (sessionId === "s_mock_retake" && currentEye === "OS") {
-          document.getElementById("processing-view").style.display = "none";
-          document.getElementById("retake-view").style.display = "block";
+          const pView = document.getElementById("processing-view");
+          const rView = document.getElementById("retake-view");
+          if (pView) pView.classList.add("hidden");
+          if (rView) rView.classList.remove("hidden");
           return;
         }
 

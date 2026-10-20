@@ -23,18 +23,18 @@
         <img id="camera-stream" src="/api/preview.mjpg" alt="Live camera preview">
         
         <!-- Stream Fallback Overlay if unavailable -->
-        <div id="stream-fallback" style="display: none;">
-          <svg class="icon" style="width: 36px; height: 36px; color: var(--warn-border); margin-bottom: 8px;"><use href="#icon-alert-triangle"></use></svg>
+        <div id="stream-fallback" class="stream-fallback hidden">
+          <svg class="icon icon-fallback-warn"><use href="#icon-alert-triangle"></use></svg>
           <p class="fallback-title">Preview unavailable</p>
           <p class="fallback-desc">Unable to connect to camera stream.</p>
-          <button type="button" id="btn-retry-stream" class="btn btn-secondary" style="min-height: 48px;">
+          <button type="button" id="btn-retry-stream" class="btn btn-secondary">
             <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
             <span>Retry preview</span>
           </button>
         </div>
 
         <!-- Recording Countdown Overlay -->
-        <div id="recording-overlay" style="display: none;">
+        <div id="recording-overlay" class="recording-overlay hidden">
           <div class="countdown-circle numeric" id="countdown-val">5</div>
           <p class="countdown-label" data-i18n="align.hold">Hold still</p>
         </div>
@@ -47,13 +47,13 @@
     <!-- Right Column (Desktop) / Bottom (Mobile): Distance Telemetry & Record Action -->
     <div class="align-controls-column">
       <div class="card align-meter-card">
-        <div class="card-header" style="margin-bottom: 6px;">
+        <div class="card-header align-meter-header">
           <h3 class="card-title">
             <svg class="icon"><use href="#icon-ruler"></use></svg>
             <span data-i18n="home.status.tof">Distance sensor</span>
           </h3>
           <span id="distance-badge" class="badge badge-warn">
-            <svg class="icon" style="width: 14px; height: 14px;"><use href="#icon-alert-triangle"></use></svg>
+            <svg class="icon icon-sm"><use href="#icon-alert-triangle"></use></svg>
             <span id="distance-state-text" data-i18n="align.tooFar">Move closer</span>
           </span>
         </div>
@@ -87,7 +87,7 @@
         </div>
 
         <!-- Warning banner if distance changed during recording or capture error -->
-        <div id="recording-alert" class="recording-alert" style="display: none;" role="alert">
+        <div id="recording-alert" class="recording-alert hidden" role="alert">
           <svg class="icon"><use href="#icon-alert-triangle"></use></svg>
           <span id="recording-alert-text"></span>
         </div>
@@ -131,11 +131,11 @@
   const alertText = document.getElementById("recording-alert-text");
 
   cameraStream?.addEventListener("error", () => {
-    if (streamFallback) streamFallback.style.display = "flex";
+    if (streamFallback) streamFallback.classList.remove("hidden");
   });
 
   btnRetryStream?.addEventListener("click", () => {
-    if (streamFallback) streamFallback.style.display = "none";
+    if (streamFallback) streamFallback.classList.add("hidden");
     if (cameraStream) cameraStream.src = `/api/preview.mjpg?t=${Date.now()}`;
   });
 
@@ -224,9 +224,9 @@
     if (isRecording || btnRecord.disabled) return;
     isRecording = true;
     btnRecord.disabled = true;
-    overlay.style.display = "flex";
+    overlay.classList.remove("hidden");
     countdownVal.textContent = "5";
-    alertBox.style.display = "none";
+    alertBox.classList.add("hidden");
 
     // Pause distance polling during capture
     if (distEvtSource) {
@@ -263,9 +263,9 @@
             } else {
               // Distance changed or capture error -> show retake notice
               isRecording = false;
-              overlay.style.display = "none";
+              overlay.classList.add("hidden");
               alertText.textContent = msg.message || "Distance changed during recording. Retake.";
-              alertBox.style.display = "flex";
+              alertBox.classList.remove("hidden");
               stabilityText.textContent = "Realign in 10–15 cm range.";
               inRangeStartTime = null;
               btnRecord.disabled = true;
@@ -281,17 +281,17 @@
         recordStream.close();
         window.recordStream = null;
         isRecording = false;
-        overlay.style.display = "none";
+        overlay.classList.add("hidden");
         alertText.textContent = "Recording stream disconnected. Please retry.";
-        alertBox.style.display = "flex";
+        alertBox.classList.remove("hidden");
         initDistanceStream();
       };
 
     } catch (err) {
       isRecording = false;
-      overlay.style.display = "none";
+      overlay.classList.add("hidden");
       alertText.textContent = "Failed to start recording: " + err.message;
-      alertBox.style.display = "flex";
+      alertBox.classList.remove("hidden");
       initDistanceStream();
     }
   });

@@ -127,6 +127,24 @@
     </div>
   </div>
 
+  <!-- Research Mode Toggle Card -->
+  <div class="card">
+    <h3 class="card-title settings-section-title">
+      <svg class="icon icon-teal"><use href="#icon-file-text"></use></svg>
+      <span data-i18n="settings.researchMode">{{ t('settings.researchMode') }}</span>
+    </h3>
+    <label class="toggle-label" for="toggle-research-mode">
+      <input type="checkbox" id="toggle-research-mode" class="toggle-checkbox" {% if settings_data.research_mode %}checked{% endif %}>
+      <div>
+        <div class="toggle-title" data-i18n="settings.researchMode">{{ t('settings.researchMode') }}</div>
+        <div class="toggle-desc" data-i18n="settings.researchModeDesc">{{ t('settings.researchModeDesc') }}</div>
+      </div>
+    </label>
+    <div id="research-mode-feedback" class="settings-feedback hidden">
+      Research mode updated.
+    </div>
+  </div>
+
   <!-- About and Disclaimer Card -->
   <div class="card about-disclaimer-card">
     <h3 class="card-title settings-section-title">

@@ -54,6 +54,8 @@ def create_app():
             "mock_mode": MOCK_MODE,
             "software_version": SOFTWARE_VERSION,
             "device_name": DEVICE_NAME,
+            "storage_free_gb": get_storage_free_str(),
+            "research_mode": store.get_setting("research_mode", "0") == "1",
             "current_lang": lang,
             "t": lambda key, **kw: translate(key, lang=lang, **kw)
         }
@@ -113,6 +115,7 @@ def create_app():
             "software_version": SOFTWARE_VERSION,
             "site_name": store.get_setting("site_name", ""),
             "clock_set": store.get_setting("clock_set", "1") == "1",
+            "research_mode": store.get_setting("research_mode", "0") == "1",
             "tof_calibrated_date": TOF_CALIBRATED_DATE or "Not recorded",
             "led_drive_setting": LED_DRIVE_SETTING or "Not set",
             "mock_mode": MOCK_MODE

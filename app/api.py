@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from flask import Blueprint, jsonify, request, Response, send_from_directory
 from app import store
+from app.clinical import compute_se
 from app.config import (
     MOCK_MODE, MEDIA_FOLDER, DEVICE_NAME, DEVICE_SSID,
     DEVICE_IP, SOFTWARE_VERSION, get_storage_free_gb,
@@ -194,25 +195,44 @@ def update_ground_truth(id):
     if not session:
         return jsonify({"error": "Session not found"}), 404
     data = request.get_json() or {}
-    eye = data.get("eye")  # "OD" or "OS"
-    if eye not in ("OD", "OS"):
-        return jsonify({"error": "Invalid eye"}), 400
     
     eyes = session.get("eyes", {})
-    eye_data = eyes.get(eye, {})
-    eye_data["ground_truth"] = {
-        "sphere_D": float(data.get("sphere_D", 0.0)),
-        "cylinder_D": float(data.get("cylinder_D", 0.0)),
-        "se_D": round(float(data.get("sphere_D", 0.0)) + float(data.get("cylinder_D", 0.0)) / 2.0, 2)
-    }
-    eyes[eye] = eye_data
+    
+    if "eye" in data:
+        eye = data.get("eye")  # "OD" or "OS"
+        if eye not in ("OD", "OS"):
+            return jsonify({"error": "Invalid eye"}), 400
+        sph = float(data.get("sphere_D", 0.0))
+        cyl = float(data.get("cylinder_D", 0.0))
+        eye_data = eyes.get(eye, {})
+        eye_data["ground_truth"] = {
+            "sphere_D": sph,
+            "cylinder_D": cyl,
+            "se_D": compute_se(sph, cyl)
+        }
+        eyes[eye] = eye_data
+    else:
+        for eye_key in ("OD", "OS"):
+            if eye_key in data:
+                e_data = data[eye_key]
+                sph = float(e_data.get("sphere_D", 0.0))
+                cyl = float(e_data.get("cylinder_D", 0.0))
+                eye_data = eyes.get(eye_key, {})
+                eye_data["ground_truth"] = {
+                    "sphere_D": sph,
+                    "cylinder_D": cyl,
+                    "se_D": compute_se(sph, cyl)
+                }
+                eyes[eye_key] = eye_data
+
     updated = store.update_session(id, eyes=eyes)
     return jsonify(updated)
 
 def sanitize_csv_cell(val):
     """
-    Prevents spreadsheet formula injection in CSV exports by prefixing
-    cells starting with '=', '+', '-', '@', '\t', or '\r' with a single quote.
+    Prevents spreadsheet formula injection in CSV exports for free-text cells
+    by prefixing strings starting with '=', '+', '-', '@', '\t', or '\r' with a single quote.
+    Only applied to free-text columns (session_id, participant_code, site).
     """
     if val is None:
         return ""
@@ -242,15 +262,32 @@ def export_csv():
         os_gt = os_eye.get("ground_truth") or {}
         
         row = [
-            s["id"], s["participant_code"], s["created_at"], s.get("site", ""),
-            "REFERRAL" if s["referral"] else ("NO_REFERRAL" if s["referral"] is False else "INCOMPLETE"),
+            sanitize_csv_cell(s.get("id", "")),
+            sanitize_csv_cell(s.get("participant_code", "")),
+            s.get("created_at", ""),
+            sanitize_csv_cell(s.get("site", "")),
+            "REFERRAL" if s.get("referral") else ("NO_REFERRAL" if s.get("referral") is False else "INCOMPLETE"),
             ";".join(s.get("referral_eyes", [])),
-            od.get("status", ""), od.get("sphere_D", ""), od.get("cylinder_D", ""), od.get("se_D", ""), od.get("label", ""), od.get("frames_used", ""),
-            os_eye.get("status", ""), os_eye.get("sphere_D", ""), os_eye.get("cylinder_D", ""), os_eye.get("se_D", ""), os_eye.get("label", ""), os_eye.get("frames_used", ""),
-            od_gt.get("sphere_D", ""), od_gt.get("cylinder_D", ""), od_gt.get("se_D", ""),
-            os_gt.get("sphere_D", ""), os_gt.get("cylinder_D", ""), os_gt.get("se_D", "")
+            od.get("status", ""),
+            od.get("sphere_D", ""),
+            od.get("cylinder_D", ""),
+            od.get("se_D", ""),
+            od.get("label", ""),
+            od.get("frames_used", ""),
+            os_eye.get("status", ""),
+            os_eye.get("sphere_D", ""),
+            os_eye.get("cylinder_D", ""),
+            os_eye.get("se_D", ""),
+            os_eye.get("label", ""),
+            os_eye.get("frames_used", ""),
+            od_gt.get("sphere_D", ""),
+            od_gt.get("cylinder_D", ""),
+            od_gt.get("se_D", ""),
+            os_gt.get("sphere_D", ""),
+            os_gt.get("cylinder_D", ""),
+            os_gt.get("se_D", "")
         ]
-        writer.writerow([sanitize_csv_cell(c) for c in row])
+        writer.writerow(row)
     
     return Response(
         output.getvalue(),
@@ -263,13 +300,18 @@ def manage_settings():
     if request.method == "POST":
         data = request.get_json() or {}
         for k, v in data.items():
-            store.set_setting(k, v)
+            if k == "research_mode":
+                val = "1" if v in (True, 1, "1", "true", "True") else "0"
+                store.set_setting(k, val)
+            else:
+                store.set_setting(k, v)
         return jsonify({"success": True})
     
     return jsonify({
         "lang": store.get_setting("lang", "en"),
         "site_name": store.get_setting("site_name", ""),
         "clock_set": store.get_setting("clock_set", "1") == "1",
+        "research_mode": store.get_setting("research_mode", "0") == "1",
         "device_name": DEVICE_NAME,
         "ssid": DEVICE_SSID,
         "ip": DEVICE_IP,

@@ -1,23 +1,23 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="session-not-found-container" style="max-width: 520px; margin: 40px auto; text-align: center;">
-  <div class="card" style="padding: 32px 24px;">
-    <div style="margin-bottom: 20px;">
-      <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--warn-bg); border: 2px solid var(--warn-border); display: inline-flex; align-items: center; justify-content: center; color: var(--warn-text);">
-        <svg class="icon" style="width: 32px; height: 32px;"><use href="#icon-alert-circle"></use></svg>
+<div class="session-not-found-container">
+  <div class="card session-not-found-card">
+    <div class="not-found-icon-wrapper">
+      <div class="not-found-icon-circle">
+        <svg class="icon icon-xl"><use href="#icon-alert-circle"></use></svg>
       </div>
     </div>
 
-    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 12px; color: var(--text);">
+    <h2 class="not-found-title">
       Screening session not found
     </h2>
 
-    <p style="font-size: 15px; color: var(--text-muted); line-height: 1.6; margin-bottom: 24px;">
-      The requested screening session (<span class="numeric" style="font-weight: 600;">{{ session_id }}</span>) does not exist or has been removed from this device.
+    <p class="not-found-desc">
+      The requested screening session (<span class="numeric not-found-code">{{ session_id }}</span>) does not exist or has been removed from this device.
     </p>
 
-    <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div class="not-found-actions">
       <a href="/screen/new" class="btn btn-primary btn-block">
         <svg class="icon"><use href="#icon-scan"></use></svg>
         <span>Start new screening</span>

@@ -82,11 +82,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 4. Research Mode Toggle
   const researchToggle = document.getElementById("toggle-research-mode");
+  const researchFeedback = document.getElementById("research-mode-feedback");
   if (researchToggle) {
     researchToggle.addEventListener("change", async (e) => {
       const isChecked = e.target.checked;
       try {
         await postJson("/api/settings", { research_mode: isChecked ? "1" : "0" });
+        if (researchFeedback) {
+          researchFeedback.textContent = isChecked ? "Research mode enabled." : "Research mode disabled.";
+          researchFeedback.classList.remove("hidden");
+          setTimeout(() => {
+            researchFeedback.classList.add("hidden");
+          }, 3000);
+        }
       } catch (err) {
         console.error("Failed to toggle research mode:", err);
       }
