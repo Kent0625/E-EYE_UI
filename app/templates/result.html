@@ -200,6 +200,15 @@
 
 {% block content %}
 <div class="result-container">
+  <!-- Print-only Slip Header -->
+  <div class="print-slip-brand print-only">
+    <picture>
+      <source srcset="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+      <img src="{{ url_for('static', filename='img/logo.jpg') }}" alt="E-Eye" class="print-slip-logo" width="120" height="36">
+    </picture>
+    <p class="print-slip-subtitle">Vision Screening Report</p>
+  </div>
+
   {% set s = session %}
   {% set od = s.eyes.OD if (s and s.eyes and s.eyes.OD) else none %}
   {% set os_eye = s.eyes.OS if (s and s.eyes and s.eyes.OS) else none %}

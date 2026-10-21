@@ -98,6 +98,10 @@ body {
   z-index: 20;
 }
 
+.print-only {
+  display: none;
+}
+
 .brand-wrapper {
   display: flex;
   align-items: center;
@@ -107,12 +111,21 @@ body {
 .brand-logo {
   width: 28px;
   height: 28px;
-  background-color: var(--teal-600);
+  background-color: transparent;
   color: white;
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .brand-title {
@@ -2279,6 +2292,33 @@ body {
    Print Stylesheet (Printable Slip via @media print only)
    ========================================================================== */
 @media print {
+  .print-only {
+    display: block !important;
+  }
+
+  .print-slip-brand {
+    text-align: center;
+    margin-bottom: 12pt;
+    padding-bottom: 6pt;
+    border-bottom: 1px solid #000000;
+  }
+
+  .print-slip-logo {
+    max-height: 32pt;
+    width: auto;
+    margin: 0 auto;
+    display: block;
+  }
+
+  .print-slip-subtitle {
+    font-size: 9pt;
+    font-weight: 600;
+    margin-top: 2pt;
+    color: #000000;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
   /* Hide non-printable UI elements */
   .app-header,
   .bottom-nav,

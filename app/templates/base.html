@@ -6,6 +6,8 @@
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#ffffff">
   <title>{% if mock_mode %}[MOCK] {% endif %}E-Eye - Refractive Error Screening</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <link rel="preload" href="{{ url_for('static', filename='fonts/inter-latin-variable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="{{ url_for('static', filename='icons/sprite.svg') }}" as="image" type="image/svg+xml">
@@ -21,7 +23,10 @@
     <header class="app-header">
       <div class="brand-wrapper">
         <div class="brand-logo" aria-hidden="true">
-          <svg class="icon"><use href="#icon-eye"></use></svg>
+          <picture>
+            <source srcset="{{ url_for('static', filename='img/logo_mark.png') }}" type="image/png">
+            <img src="{{ url_for('static', filename='img/logo.jpg') }}" alt="" class="brand-logo-img" width="28" height="28">
+          </picture>
         </div>
         <div>
           <span class="brand-title">E-Eye</span>
