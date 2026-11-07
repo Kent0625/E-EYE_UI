@@ -159,11 +159,11 @@
         <div class="precheck-telemetry-list">
           <div class="status-item">
             <span data-i18n="home.precheck.tof">Distance sensor plausible</span>
-            <span id="precheck-tof-badge" class="badge badge-ok"><svg class="icon icon-xs"><use href="#icon-check"></use></svg> Pass</span>
+            <span id="precheck-tof-badge" class="badge badge-warn">Waiting for check</span>
           </div>
           <div class="status-item">
             <span data-i18n="home.precheck.brightness">Pupil brightness in range (128-200)</span>
-            <span id="precheck-brightness-badge" class="badge badge-ok"><svg class="icon icon-xs"><use href="#icon-check"></use></svg> Pass (154)</span>
+            <span id="precheck-brightness-badge" class="badge badge-warn">Waiting for check</span>
           </div>
         </div>
       </div>
@@ -194,13 +194,17 @@
       setBadge("status-camera", res.camera === "ok", res.camera === "ok" ? t("home.status.ok") : t("home.status.error"));
       setBadge("status-tof", res.tof === "ok", res.tof === "ok" ? t("home.status.ok") : t("home.status.error"));
       setBadge("status-led", res.led === "ok", res.led === "ok" ? t("home.status.ok") : t("home.status.error"));
-      setBadge("status-model", res.model === "loaded", res.model === "loaded" ? t("home.status.loaded") : t("home.status.error"));
+      setBadge("status-model", res.model === "loaded", res.model === "loaded" ? t("home.status.loaded") : "Prediction unavailable", res.model !== "loaded");
       
       const storageEl = document.getElementById("val-storage");
       if (storageEl) storageEl.textContent = res.storage_free_gb;
       setBadge("status-clock", res.clock_set, res.clock_set ? t("home.status.clockSet") : t("home.status.clockNotSet"), !res.clock_set);
 
-      const allOk = res.camera === "ok" && res.tof === "ok" && res.model === "loaded";
+      const allOk = res.mock_mode ? (res.camera === "ok" && res.tof === "ok" && res.model === "loaded") : res.capture_available;
+      if (!res.mock_mode && disabledReason) {
+        disabledReason.removeAttribute('data-i18n');
+        disabledReason.textContent = res.hardware_error || res.model_message || 'Check camera, sensor and LED configuration.';
+      }
       if (!allOk) {
         btnStart.classList.add("btn-disabled");
         btnStart.setAttribute("aria-disabled", "true");
@@ -208,7 +212,7 @@
       } else {
         btnStart.classList.remove("btn-disabled");
         btnStart.removeAttribute("aria-disabled");
-        if (disabledReason) disabledReason.classList.add("hidden");
+        if (disabledReason) disabledReason.classList.toggle("hidden", res.mock_mode || res.model === 'loaded');
       }
     } catch (e) {
       if (offlineBanner) offlineBanner.classList.remove("hidden");
@@ -243,6 +247,9 @@
     try {
       const res = await postJson("/api/precheck");
       if (precheckImg) precheckImg.src = res.crescent_frame_url;
+      setBadge('precheck-tof-badge', res.tof_ok, res.tof_ok ? 'Pass' : 'Check distance sensor', !res.tof_ok);
+      setBadge('precheck-brightness-badge', res.brightness_ok,
+        res.brightness_mean === null ? 'Not verified' : `${res.brightness_ok ? 'Pass' : 'Out of range'} (${res.brightness_mean})`, !res.brightness_ok);
       if (precheckLoading) precheckLoading.classList.add("hidden");
       if (precheckResults) precheckResults.classList.remove("hidden");
     } catch (err) {

@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% block head %}
+{% if research_mode %}<link rel="stylesheet" href="{{ url_for('static', filename='css/receipt.css') }}">{% endif %}
+{% endblock %}
+
 {% macro render_eye_card(eye_key, eye_data, session_id) %}
 <div class="card eye-card">
   <div class="card-header eye-card-header">
@@ -23,6 +27,8 @@
       </span>
     {% elif eye_data and eye_data.status == 'retake_needed' %}
       <span class="badge badge-warn" data-i18n="result.retakeNeeded">{{ t('result.retakeNeeded') }}</span>
+    {% elif eye_data and eye_data.status == 'captured' %}
+      <span class="badge badge-warn">Capture saved</span>
     {% else %}
       <span class="badge badge-warn" data-i18n="result.notRecorded">{{ t('result.notRecorded') }}</span>
     {% endif %}
@@ -30,9 +36,11 @@
 
   {% if eye_data and eye_data.status == 'ok' %}
     <div class="eye-card-body">
+      {% if eye_data.thumbnail_url or mock_mode %}
       <img src="{{ eye_data.thumbnail_url or ('/media/' ~ eye_key ~ '_sample.jpg') }}"
            alt="{{ t('result.altThumbnail' ~ eye_key) }}"
            class="eye-thumbnail">
+      {% endif %}
       <div>
         <div class="eye-se-label" data-i18n="result.se">{{ t('result.se') }}</div>
         <!-- Large SE in diopters with true minus sign and tabular numerals -->
@@ -71,6 +79,16 @@
         <svg class="icon"><use href="#icon-refresh-cw"></use></svg>
         <span>{{ t('result.retakeBtn' ~ eye_key) }}</span>
       </a>
+    </div>
+  {% elif eye_data and eye_data.status == 'captured' %}
+    <div class="eye-retake-body">
+      <p class="eye-retake-error">Capture saved. Prediction unavailable.</p>
+      {% if eye_data.message %}<p class="form-hint">{{ eye_data.message }}</p>{% endif %}
+      <p class="eye-quality-line numeric">{{ eye_data.frames_total }} frames captured.{% if eye_data.quality_status == 'passed' %} {{ eye_data.frames_used }} frames selected.{% else %} Quality filtering: {{ eye_data.quality_status }}.{% endif %}</p>
+      {% if eye_data.capture_id %}
+        <a href="/api/sessions/{{ session_id }}/captures/{{ eye_data.capture_id }}/download" class="btn btn-secondary btn-block">Download {{ eye_key }} capture</a>
+      {% endif %}
+      <a href="/screen/{{ session_id }}/{{ eye_key }}" class="btn btn-secondary btn-block">Retake {{ eye_key }}</a>
     </div>
   {% else %}
     <p class="eye-unrecorded" data-i18n="result.unrecorded{{ eye_key }}">{{ t('result.unrecorded' ~ eye_key) }}</p>
@@ -122,77 +140,90 @@
   <div class="card-header">
     <h3 class="card-title">
       <svg class="icon icon-teal"><use href="#icon-file-text"></use></svg>
-      <span data-i18n="result.groundTruth">{{ t('result.groundTruth') }}</span>
+      <span>Autorefractor receipt and ground truth</span>
     </h3>
-    <span class="badge badge-warn" data-i18n="app.mock">RESEARCH</span>
+    <span class="badge badge-warn">Research</span>
   </div>
-  
-  <p class="form-hint">
-    Enter paired autorefractor measurements to evaluate mean absolute error (MAE).
-  </p>
-
-  <form id="form-ground-truth" data-session-id="{{ s.id }}">
-    <div class="ground-truth-grid">
-      <!-- Right Eye (OD) Ground Truth -->
-      <div class="ground-truth-eye-box">
-        <div class="ground-truth-eye-title">
-          <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
-          <span data-i18n="result.od">Right eye (OD)</span>
+  <p class="receipt-participant">Attach the reference for <strong>{{ s.participant_code }}</strong>.</p>
+  <p class="form-hint">Photograph the receipt with this phone or choose a saved photo. Check the eye labels, signs and numbers before confirming.</p>
+  <form id="form-ground-truth" data-session-id="{{ s.id }}" data-participant-code="{{ s.participant_code }}">
+    <div class="receipt-buttons">
+      <button type="button" class="btn btn-secondary" id="receipt-camera-button"><svg class="icon"><use href="#icon-camera"></use></svg>Take receipt photo</button>
+      <button type="button" class="btn btn-secondary" id="receipt-file-button">Choose photo</button>
+      <input type="file" id="receipt-camera-input" accept="image/jpeg,image/png" capture="environment" hidden aria-label="Take receipt photo">
+      <input type="file" id="receipt-file-input" accept="image/jpeg,image/png" hidden aria-label="Choose receipt photo">
+    </div>
+    <p id="receipt-status" class="receipt-feedback" role="status" aria-live="polite">No receipt selected. You can also enter the reference manually.</p>
+    <label class="gt-label" for="receipt-select">Saved receipt</label>
+    <select id="receipt-select" class="form-input"><option value="">No photo selected</option></select>
+    <div class="receipt-review-layout">
+      <div class="receipt-photo-panel">
+        <img id="receipt-preview" alt="Autorefractor receipt for participant {{ s.participant_code }}" hidden>
+        <div class="receipt-buttons" id="receipt-photo-actions" hidden>
+          <button type="button" class="btn btn-secondary" id="receipt-read-button">Read numbers</button>
+          <button type="button" class="btn btn-secondary" id="receipt-rotate-button">Rotate photo</button>
         </div>
-        <div class="gt-inputs-row">
-          <div class="gt-input-group">
-            <label for="gt-od-sphere" class="gt-label" data-i18n="result.sphere">Sphere (D)</label>
-            <input type="number" step="0.25" id="gt-od-sphere" name="od_sphere" class="numeric gt-input"
-                   placeholder="0.00" value="{{ od.ground_truth.sphere_D if (od and od.ground_truth and od.ground_truth.sphere_D is not none) else '' }}">
-          </div>
-          <div class="gt-input-group">
-            <label for="gt-od-cylinder" class="gt-label" data-i18n="result.cylinder">Cylinder (D)</label>
-            <input type="number" step="0.25" id="gt-od-cylinder" name="od_cylinder" class="numeric gt-input"
-                   placeholder="0.00" value="{{ od.ground_truth.cylinder_D if (od and od.ground_truth and od.ground_truth.cylinder_D is not none) else '' }}">
-          </div>
-        </div>
-        <div class="gt-computed-se numeric" id="gt-od-se-display">
-          {% if od and od.ground_truth and od.ground_truth.se_D is not none %}
-            <span data-i18n="result.groundTruthSe">{{ t('result.groundTruthSe') }}</span>: {{ "−" if od.ground_truth.se_D < 0 else ("+" if od.ground_truth.se_D > 0 else "") }}{{ "%.2f" | format(od.ground_truth.se_D | abs) }} D
-          {% endif %}
-        </div>
+        <details id="receipt-transcription" hidden>
+          <summary>View unconfirmed text</summary>
+          <pre id="receipt-ocr-text"></pre>
+        </details>
       </div>
-
-      <!-- Left Eye (OS) Ground Truth -->
-      <div class="ground-truth-eye-box">
-        <div class="ground-truth-eye-title">
-          <svg class="icon icon-teal"><use href="#icon-eye"></use></svg>
-          <span data-i18n="result.os">Left eye (OS)</span>
-        </div>
-        <div class="gt-inputs-row">
-          <div class="gt-input-group">
-            <label for="gt-os-sphere" class="gt-label" data-i18n="result.sphere">Sphere (D)</label>
-            <input type="number" step="0.25" id="gt-os-sphere" name="os_sphere" class="numeric gt-input"
-                   placeholder="0.00" value="{{ os_eye.ground_truth.sphere_D if (os_eye and os_eye.ground_truth and os_eye.ground_truth.sphere_D is not none) else '' }}">
-          </div>
-          <div class="gt-input-group">
-            <label for="gt-os-cylinder" class="gt-label" data-i18n="result.cylinder">Cylinder (D)</label>
-            <input type="number" step="0.25" id="gt-os-cylinder" name="os_cylinder" class="numeric gt-input"
-                   placeholder="0.00" value="{{ os_eye.ground_truth.cylinder_D if (os_eye and os_eye.ground_truth and os_eye.ground_truth.cylinder_D is not none) else '' }}">
-          </div>
-        </div>
-        <div class="gt-computed-se numeric" id="gt-os-se-display">
-          {% if os_eye and os_eye.ground_truth and os_eye.ground_truth.se_D is not none %}
-            <span data-i18n="result.groundTruthSe">{{ t('result.groundTruthSe') }}</span>: {{ "−" if os_eye.ground_truth.se_D < 0 else ("+" if os_eye.ground_truth.se_D > 0 else "") }}{{ "%.2f" | format(os_eye.ground_truth.se_D | abs) }} D
-          {% endif %}
+      <div class="receipt-values-panel">
+        <label class="gt-label" for="reference-method">Reference source</label>
+        <select id="reference-method" class="form-input" aria-describedby="reference-method-hint">
+          <option value="manual">Manual entry</option>
+          <option value="printed_average">Printed average on receipt</option>
+          <option value="three_readings">Mean of three readings</option>
+        </select>
+        <p class="form-hint" id="reference-method-hint">Choose the method used for this reference. Leave an unavailable eye blank.</p>
+        <div class="receipt-eye-fields">
+          {% for key, eye, label in [('od', od, 'Right eye (OD)'), ('os', os_eye, 'Left eye (OS)')] %}
+          {% set truth = eye.ground_truth if (eye and eye.ground_truth) else none %}
+          <fieldset class="receipt-eye" data-eye="{{ key | upper }}" data-revision="{{ truth.revision | default(0) if truth else 0 }}">
+            <legend>{{ label }}</legend>
+            <div class="receipt-summary-inputs">
+              <div class="gt-input-group">
+                <label for="gt-{{ key }}-sphere" class="gt-label">Sphere (D)</label>
+                <input type="number" step="any" min="-20" max="20" id="gt-{{ key }}-sphere" class="numeric gt-input" value="{{ truth.sphere_D if truth else '' }}">
+              </div>
+              <div class="gt-input-group">
+                <label for="gt-{{ key }}-cylinder" class="gt-label">Cylinder (D)</label>
+                <input type="number" step="any" min="-20" max="20" id="gt-{{ key }}-cylinder" class="numeric gt-input" value="{{ truth.cylinder_D if truth else '' }}">
+              </div>
+            </div>
+            <div class="receipt-three-readings" hidden>
+              {% for number in [1, 2, 3] %}
+              <div class="receipt-reading">
+                <span class="receipt-reading-number">Reading {{ number }}</span>
+                <div class="gt-input-group">
+                  <label for="gt-{{ key }}-{{ number }}-sphere" class="gt-label">Sphere (D)</label>
+                  <input type="number" step="any" min="-20" max="20" id="gt-{{ key }}-{{ number }}-sphere" class="numeric gt-input">
+                </div>
+                <div class="gt-input-group">
+                  <label for="gt-{{ key }}-{{ number }}-cylinder" class="gt-label">Cylinder (D)</label>
+                  <input type="number" step="any" min="-20" max="20" id="gt-{{ key }}-{{ number }}-cylinder" class="numeric gt-input">
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="gt-input-group receipt-axis">
+              <label for="gt-{{ key }}-axis" class="gt-label">Axis (degrees, optional)</label>
+              <input type="number" step="1" min="0" max="180" id="gt-{{ key }}-axis" class="numeric gt-input" value="{{ truth.axis_deg | default('') if truth else '' }}">
+            </div>
+            <p class="gt-computed-se numeric" id="gt-{{ key }}-se-display">{% if truth %}Saved reference SE: {{ '%+.2f' | format(truth.se_D) }} D{% endif %}</p>
+          </fieldset>
+          {% endfor %}
         </div>
       </div>
     </div>
-
-    <div class="gt-actions-row">
-      <button type="submit" id="btn-save-ground-truth" class="btn btn-secondary btn-block" data-i18n="result.saveGroundTruth">
-        <svg class="icon"><use href="#icon-check"></use></svg>
-        <span>{{ t('result.saveGroundTruth') }}</span>
-      </button>
-      <div id="gt-save-feedback" class="gt-feedback hidden" data-i18n="result.groundTruthSaved">
-        {{ t('result.groundTruthSaved') }}
-      </div>
-    </div>
+    <label class="receipt-confirm-label" for="gt-confirmed">
+      <input type="checkbox" id="gt-confirmed">
+      <span>I checked the participant code, eye labels, signs and values against the reference.</span>
+    </label>
+    <p class="form-hint" id="gt-confirm-hint">Confirm the values to enable saving.</p>
+    <button type="submit" id="btn-save-ground-truth" class="btn btn-primary btn-block" disabled aria-describedby="gt-confirm-hint">Save confirmed ground truth</button>
+    <p id="gt-save-feedback" class="receipt-feedback" role="status" aria-live="polite"></p>
+    <script id="receipt-saved-eyes" type="application/json">{{ s.eyes | tojson }}</script>
   </form>
 </div>
 {% endif %}
@@ -234,12 +265,13 @@
   {# Clinical Referral rule per manuscript: refer if ANY recorded eye is outside range #}
   {% set has_referral = (outside_eyes | length > 0) or (s and s.referral is true) %}
   {% set has_retake = (retake_eyes | length > 0) or (s and s.status == 'retake_needed') %}
+  {% set incomplete = not od or od.status != 'ok' or not os_eye or os_eye.status != 'ok' %}
 
   <div class="result-layout">
     <!-- Sidebar on Desktop (>= 1024px) / Top of Page on Mobile (< 1024px) -->
     <aside class="result-sidebar">
       <!-- Referral Banner: First element visible at all widths, never red -->
-      <div id="referral-banner" class="card referral-banner {% if has_referral or has_retake %}badge-warn{% else %}badge-ok{% endif %}"
+      <div id="referral-banner" class="card referral-banner {% if has_referral or has_retake or incomplete %}badge-warn{% else %}badge-ok{% endif %}"
            role="status" aria-live="polite">
         <div class="referral-banner-inner">
           {% if has_referral %}
@@ -260,7 +292,7 @@
                 </p>
               {% endif %}
             </div>
-          {% elif has_retake %}
+          {% elif has_retake or incomplete %}
             <svg class="icon icon-lg"><use href="#icon-alert-triangle"></use></svg>
             <div>
               <h2 class="referral-banner-title" data-i18n="result.incomplete">
@@ -310,67 +342,16 @@
 {% endblock %}
 
 {% block scripts %}
+{% if research_mode %}
+<script src="{{ url_for('static', filename='vendor/ocr/tesseract.min.js') }}" defer></script>
+<script type="module" src="{{ url_for('static', filename='js/receipt.js') }}"></script>
+{% endif %}
 <script type="module">
-  import { postJson } from "{{ url_for('static', filename='js/api.js') }}";
-  import { t } from "{{ url_for('static', filename='js/i18n.js') }}";
-
-  // Print slip action
   document.querySelectorAll(".btn-print-slip").forEach(btn => {
     btn.addEventListener("click", () => {
       window.print();
     });
   });
 
-  // Ground truth saving (Research mode)
-  const gtForm = document.getElementById("form-ground-truth");
-  const gtFeedback = document.getElementById("gt-save-feedback");
-  const odSeDisplay = document.getElementById("gt-od-se-display");
-  const osSeDisplay = document.getElementById("gt-os-se-display");
-
-  if (gtForm) {
-    gtForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const sessionId = gtForm.getAttribute("data-session-id");
-      const odSph = document.getElementById("gt-od-sphere")?.value;
-      const odCyl = document.getElementById("gt-od-cylinder")?.value;
-      const osSph = document.getElementById("gt-os-sphere")?.value;
-      const osCyl = document.getElementById("gt-os-cylinder")?.value;
-
-      const payload = {};
-      if (odSph !== "" && odCyl !== "") {
-        payload.OD = { sphere_D: parseFloat(odSph), cylinder_D: parseFloat(odCyl) };
-      }
-      if (osSph !== "" && osCyl !== "") {
-        payload.OS = { sphere_D: parseFloat(osSph), cylinder_D: parseFloat(osCyl) };
-      }
-
-      try {
-        const res = await postJson(`/api/sessions/${sessionId}/ground-truth`, payload);
-        if (gtFeedback) {
-          gtFeedback.classList.remove("hidden");
-          setTimeout(() => gtFeedback.classList.add("hidden"), 3500);
-        }
-
-        const eyes = res.eyes || {};
-        if (eyes.OD && eyes.OD.ground_truth && eyes.OD.ground_truth.se_D !== null && eyes.OD.ground_truth.se_D !== undefined) {
-          const se = eyes.OD.ground_truth.se_D;
-          const sign = se < 0 ? "−" : (se > 0 ? "+" : "");
-          if (odSeDisplay) {
-            odSeDisplay.textContent = `${t("result.groundTruthSe")}: ${sign}${Math.abs(se).toFixed(2)} D`;
-          }
-        }
-
-        if (eyes.OS && eyes.OS.ground_truth && eyes.OS.ground_truth.se_D !== null && eyes.OS.ground_truth.se_D !== undefined) {
-          const se = eyes.OS.ground_truth.se_D;
-          const sign = se < 0 ? "−" : (se > 0 ? "+" : "");
-          if (osSeDisplay) {
-            osSeDisplay.textContent = `${t("result.groundTruthSe")}: ${sign}${Math.abs(se).toFixed(2)} D`;
-          }
-        }
-      } catch (err) {
-        console.error("Failed to save ground truth:", err);
-      }
-    });
-  }
 </script>
 {% endblock %}

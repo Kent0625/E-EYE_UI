@@ -5,7 +5,8 @@ export async function getJson(url) {
       headers: { "Accept": "application/json" }
     });
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.error || `HTTP ${res.status}: ${res.statusText}`);
     }
     return await res.json();
   } catch (err) {
@@ -25,7 +26,8 @@ export async function postJson(url, data = {}) {
       body: JSON.stringify(data)
     });
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.error || `HTTP ${res.status}: ${res.statusText}`);
     }
     return await res.json();
   } catch (err) {
@@ -41,7 +43,8 @@ export async function deleteJson(url) {
       headers: { "Accept": "application/json" }
     });
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.error || `HTTP ${res.status}: ${res.statusText}`);
     }
     return await res.json();
   } catch (err) {

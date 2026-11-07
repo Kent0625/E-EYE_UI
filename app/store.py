@@ -4,13 +4,22 @@ import os
 from datetime import datetime
 from app.config import DATABASE_PATH
 
+class ClosingConnection(sqlite3.Connection):
+    def __exit__(self, *args):
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.close()
+
 def get_connection():
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=15, factory=ClosingConnection)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
+    os.makedirs(os.path.dirname(os.path.abspath(DATABASE_PATH)), exist_ok=True)
     with get_connection() as conn:
+        conn.execute('PRAGMA journal_mode=WAL')
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (

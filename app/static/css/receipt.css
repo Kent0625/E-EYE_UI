@@ -1,0 +1,31 @@
+.receipt-participant { margin: 0 0 8px; }
+.receipt-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
+.receipt-buttons[hidden], .receipt-photo-panel [hidden], .receipt-eye [hidden] { display: none; }
+.receipt-feedback { margin: 12px 0; overflow-wrap: anywhere; color: var(--text-muted); }
+.receipt-feedback[data-error="true"] { color: var(--danger-text); }
+.receipt-review-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 24px; }
+.receipt-photo-panel:has(#receipt-preview[hidden]) { display: none; }
+.receipt-photo-panel, .receipt-values-panel { min-width: 0; }
+#receipt-preview { display: block; width: 100%; max-height: 640px; object-fit: contain; background: var(--bg); border-radius: var(--radius-control); }
+#receipt-ocr-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; padding: 12px; font-size: 14px; background: var(--bg); }
+#receipt-transcription summary { cursor: pointer; margin: 12px 0; text-decoration: underline; text-underline-offset: 4px; }
+.receipt-eye-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 24px; }
+.receipt-eye { border: 0; border-top: 1px solid var(--border); min-width: 0; padding-top: 12px; }
+.receipt-eye legend { padding: 0 8px 0 0; font-weight: 650; }
+.receipt-summary-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.receipt-reading { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-bottom: 12px; }
+.receipt-reading-number { grid-column: 1 / -1; color: var(--text-muted); font-size: 14px; }
+.receipt-axis { margin-top: 12px; max-width: 240px; }
+.receipt-confirm-label { display: flex; align-items: flex-start; gap: 12px; margin: 24px 0 8px; cursor: pointer; }
+.receipt-confirm-label input { flex: 0 0 20px; width: 20px; height: 20px; margin-top: 4px; accent-color: var(--teal-700); }
+#form-ground-truth select { width: 100%; }
+#form-ground-truth input[type="number"] { width: 100%; min-width: 0; }
+#form-ground-truth button:disabled { cursor: not-allowed; }
+#receipt-select + .receipt-review-layout:has(#receipt-preview:not([hidden])) { align-items: start; }
+@media (min-width: 768px) {
+  .receipt-review-layout:has(#receipt-preview:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+  .receipt-review-layout:not(:has(#receipt-preview:not([hidden]))) .receipt-eye-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media print {
+  #ground-truth-section { display: none !important; }
+}

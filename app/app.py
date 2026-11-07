@@ -10,6 +10,7 @@ from app import store
 from app.api import api_bp
 from app.mock.fixtures import seed_fixtures_if_empty
 from app.mock.generator import ensure_sample_media
+from app.receipts import receipts_bp, init_receipts_db
 
 # Load i18n dictionaries at startup for server-side rendering
 I18N_DICTS = {}
@@ -33,9 +34,11 @@ def create_app():
     
     # Initialize SQLite store
     store.init_db()
+    init_receipts_db()
     
     # Initialize sample media assets
-    ensure_sample_media(MEDIA_FOLDER)
+    if MOCK_MODE:
+        ensure_sample_media(MEDIA_FOLDER)
     
     # Seed mock fixtures if in mock mode
     if MOCK_MODE:
@@ -43,6 +46,24 @@ def create_app():
     
     # Register API and Media Blueprint
     app.register_blueprint(api_bp)
+    app.register_blueprint(receipts_bp)
+    if not MOCK_MODE:
+        from app.capture import CapturePipeline, init_capture_db
+        from app.hardware import PiHardware
+        from app.config import CAPTURE_FOLDER
+        init_capture_db()
+        app.extensions['capture_pipeline'] = CapturePipeline(PiHardware(), CAPTURE_FOLDER)
+        if store.get_setting('research_mode', None) is None:
+            store.set_setting('research_mode', '1')
+
+    @app.before_request
+    def reject_cross_origin_mutations():
+        from urllib.parse import urlsplit
+        from flask import jsonify
+        if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+            origin = request.headers.get('Origin')
+            if (origin and urlsplit(origin).netloc != request.host) or request.headers.get('Sec-Fetch-Site') == 'cross-site':
+                return jsonify(error='Open the E-Eye interface on this device to make changes.'), 403
     
     # Context processor to make version, mock status, device metadata and server-rendered strings available
     @app.context_processor
@@ -81,6 +102,8 @@ def create_app():
     
     @app.route("/screen/<id>/<eye>")
     def page_record(id, eye):
+        if eye not in ('OD', 'OS'):
+            return 'Eye must be OD or OS.', 400
         session = store.get_session(id)
         if not session:
             return render_template("session_not_found.html", session_id=id, active_nav="screen"), 404
@@ -127,4 +150,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

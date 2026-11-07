@@ -158,6 +158,7 @@
         console.error("Distance SSE parse error:", e);
       }
     };
+    distEvtSource.onerror = () => renderDistance({valid:false});
   }
 
   function renderDistance(data) {
@@ -235,13 +236,13 @@
     }
 
     try {
-      await postJson(`/api/sessions/${sessionId}/record`, { eye: currentEye });
+      const job = await postJson(`/api/sessions/${sessionId}/record`, { eye: currentEye });
       
       // Determine simulation mode from URL query parameters (e.g. ?simulate=drift or ?simulate=error)
       const urlParams = new URLSearchParams(window.location.search);
       const simMode = urlParams.get("simulate") || "normal";
       const fastMode = urlParams.get("fast") || "0";
-      const sseUrl = `/api/sessions/${sessionId}/record/stream?eye=${currentEye}&simulate=${simMode}&fast=${fastMode}`;
+      const sseUrl = `/api/sessions/${sessionId}/record/stream?eye=${currentEye}&simulate=${simMode}&fast=${fastMode}${job.id ? '&job='+encodeURIComponent(job.id) : ''}`;
 
       const recordStream = new EventSource(sseUrl);
       window.recordStream = recordStream;
@@ -282,7 +283,7 @@
         window.recordStream = null;
         isRecording = false;
         overlay.classList.add("hidden");
-        alertText.textContent = "Recording stream disconnected. Please retry.";
+        alertText.textContent = "Connection lost. The device may still be saving. Reconnect and open this session in History before retaking.";
         alertBox.classList.remove("hidden");
         initDistanceStream();
       };

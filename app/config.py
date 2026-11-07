@@ -8,6 +8,8 @@ MOCK_MODE = os.environ.get("EEYE_MOCK", "1") == "1"
 
 # Database storage path
 DATABASE_PATH = os.environ.get("EEYE_DB", os.path.join(PROJECT_ROOT, "eeye.db"))
+DATA_DIR = os.environ.get("EEYE_DATA", os.path.join(PROJECT_ROOT, "data"))
+CAPTURE_FOLDER = os.path.join(DATA_DIR, "captures")
 
 # Static media storage for pupil thumbnails and precheck frames
 MEDIA_FOLDER = os.path.join(BASE_DIR, "static", "media")
@@ -19,7 +21,7 @@ import shutil
 DEVICE_NAME = os.environ.get("EEYE_DEVICE_NAME", "E-EYE-PROTOTYPE-01")
 DEVICE_SSID = os.environ.get("EEYE_SSID", "E-Eye-Field-01")
 DEVICE_IP = os.environ.get("EEYE_IP", "192.168.4.1")
-SOFTWARE_VERSION = "v1.0.0"
+SOFTWARE_VERSION = "v1.1.0"
 
 # Hardware calibration values (read from config/env; defaults to empty if unrecorded)
 TOF_CALIBRATED_DATE = os.environ.get("EEYE_TOF_CAL_DATE", "")

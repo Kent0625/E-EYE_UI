@@ -5,17 +5,20 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/E-EYE_UI
-Environment="PATH=/home/pi/E-EYE_UI/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+User=admin
+Group=admin
+SupplementaryGroups=video gpio i2c render
+WorkingDirectory=/opt/eeye/current
+EnvironmentFile=/etc/eeye/device.env
 Environment="PYTHONUNBUFFERED=1"
-Environment="MOCK_MODE=0"
-ExecStart=/home/pi/E-EYE_UI/.venv/bin/gunicorn -c deploy/gunicorn.conf.py app.app:app
-Restart=always
+Environment="EEYE_MOCK=0"
+ExecStart=/opt/eeye/current/.venv/bin/gunicorn -c deploy/gunicorn.conf.py app.app:app
+Restart=on-failure
 RestartSec=3s
 KillSignal=SIGTERM
-TimeoutStopSec=10
+TimeoutStopSec=35
+UMask=0077
+NoNewPrivileges=true
 LimitNOFILE=65535
 
 [Install]

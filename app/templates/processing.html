@@ -78,7 +78,7 @@
     inference: document.getElementById("step-refraction")
   };
 
-  const evtSource = new EventSource(`/api/sessions/${sessionId}/events`);
+  const evtSource = new EventSource(`/api/sessions/${sessionId}/events?eye=${encodeURIComponent(currentEye)}`);
   
   evtSource.onmessage = (e) => {
     try {
@@ -95,7 +95,7 @@
       if (data.done) {
         evtSource.close();
         // Check if we need retake (simulate only if session is s_mock_retake and eye is OS)
-        if (sessionId === "s_mock_retake" && currentEye === "OS") {
+        if (data.status === 'retake_needed' || (sessionId === "s_mock_retake" && currentEye === "OS")) {
           const pView = document.getElementById("processing-view");
           const rView = document.getElementById("retake-view");
           if (pView) pView.classList.add("hidden");
@@ -113,6 +113,12 @@
     } catch (err) {
       console.error("SSE parse error:", err);
     }
+  };
+
+  evtSource.onerror = () => {
+    evtSource.close();
+    document.querySelector('.processing-title').textContent = 'Connection lost. Reopen this session from History to check the saved capture.';
+    document.querySelector('.processing-spinner-wrapper').classList.add('hidden');
   };
 
   document.getElementById("btn-retake")?.addEventListener("click", () => {
