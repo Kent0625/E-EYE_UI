@@ -2,7 +2,7 @@
 
 This document specifies the interface boundary between the E-Eye Operator Web Interface and the physical hardware specified in the manuscript.
 
-Currently, all user interface interactions, API endpoints, and test suites run against mock implementations (`app/mock/fixtures.py`, `app/mock/generator.py`). Replacing the mock layer with physical hardware requires implementing the seams defined below without modifying the UI layer.
+Real mode (`EEYE_MOCK=0`) now uses `app.hardware.PiHardware` and durable jobs in `app.capture.CapturePipeline`. Mock mode remains available for local development. Receipt capture and operator-confirmed reference measurements are linked to the same participant/eye session. See `docs/IMPLEMENTATION_STATUS.md` for verified checks and remaining physical tests. Refraction prediction is unavailable until the trained sphere/cylinder model and its validated input contract are supplied; a segmentation model does not provide those outputs.
 
 ---
 
@@ -123,7 +123,7 @@ Following recording completion, the backend executes frame quality filtering and
 - **Clinical Calculation Contract**:
   - Spherical Equivalent ($SE$) must be computed strictly via `app.clinical.compute_se(sphere_D, cylinder_D)`:
     $$SE = \text{round}\left(\text{sphere} + \frac{\text{cylinder}}{2}, 2\right)$$
-  - Referral rule: Binary trigger if **either** eye has $|SE| > 0.50\text{ D}$ ($SE \le -0.50\text{ D}$ or $SE \ge +0.50\text{ D}$).
+  - Referral rule: Binary trigger if **either** eye has $|SE| > 0.50\text{ D}$ ($SE < -0.50\text{ D}$ or $SE > +0.50\text{ D}$). Exact boundaries remain inside the stated range.
 
 ---
 

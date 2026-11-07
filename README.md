@@ -133,7 +133,7 @@ journalctl -u eeye.service -f
 
 Physical sensors and computer vision pipelines interface with the web service via the seams documented in [`docs/HARDWARE_SEAM.md`](docs/HARDWARE_SEAM.md):
 - **Camera Seam**: MJPEG streaming at `GET /api/preview.mjpg` via `libcamera` / `Picamera2` and high-speed burst capture on `POST /api/sessions/<id>/record`.
-- **ToF Sensor Seam**: I2C distance measurement stream at `GET /api/distance` using ST VL53L1X.
+- **ToF Sensor Seam**: I2C distance measurement stream at `GET /api/distance` using ST VL53L0X.
 - **Inference Seam**: Frame feature extraction and crescent analysis computing refractive error.
 
 ---

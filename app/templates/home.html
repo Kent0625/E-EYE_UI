@@ -191,9 +191,9 @@
       if (offlineBanner) offlineBanner.classList.add("hidden");
       
       // Update badges
-      setBadge("status-camera", res.camera === "ok", res.camera === "ok" ? t("home.status.ok") : t("home.status.error"));
+      setBadge("status-camera", res.camera === "ok", res.camera === "not_checked" ? 'Not checked' : res.camera === "ok" ? t("home.status.ok") : t("home.status.error"), res.camera === 'not_checked');
       setBadge("status-tof", res.tof === "ok", res.tof === "ok" ? t("home.status.ok") : t("home.status.error"));
-      setBadge("status-led", res.led === "ok", res.led === "ok" ? t("home.status.ok") : t("home.status.error"));
+      setBadge("status-led", res.led === "ok", res.led === "stopped" ? 'Off' : res.led === "ok" ? t("home.status.ok") : t("home.status.error"), res.led === 'stopped');
       setBadge("status-model", res.model === "loaded", res.model === "loaded" ? t("home.status.loaded") : "Prediction unavailable", res.model !== "loaded");
       
       const storageEl = document.getElementById("val-storage");
