@@ -1,6 +1,7 @@
 package io.eeye.operator;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Color;
@@ -32,6 +33,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.UUID;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
     private WebView web;
@@ -66,6 +69,9 @@ public final class MainActivity extends Activity {
         addButton(controls, "Reload", view -> { if (origin != null) web.reload(); });
         addButton(controls, "Open Wi-Fi", view -> startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
         root.addView(controls);
+        LinearLayout files = new LinearLayout(this);
+        addButton(files, "Open saved files", view -> showSavedFiles());
+        root.addView(files);
         status = new TextView(this);
         status.setText("Join the same hotspot as the Pi, then connect.");
         status.setPadding(0, dp(4), 0, dp(8));
@@ -172,9 +178,11 @@ public final class MainActivity extends Activity {
         web.setDownloadListener((url,agent,disposition,type,length)->{
             if(!permitted(Uri.parse(url))) return;
             downloadUrl=url;
-            String name=url.contains("export.csv")?"eeye-records.csv":"eeye-capture.zip";
+            boolean transfer=isTransfer(url);
+            String name=transfer?"eeye-session-"+Uri.parse(url).getPathSegments().get(2)+".zip":url.contains("export.csv")?"eeye-records.csv":"eeye-capture.zip";
             Intent create=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                .setType(url.contains("export.csv")?"text/csv":"application/zip").putExtra(Intent.EXTRA_TITLE,name);
+                .setType(url.contains("export.csv")?"text/csv":"application/zip").putExtra(Intent.EXTRA_TITLE,name)
+                .putExtra(Intent.EXTRA_LOCAL_ONLY,true);
             startActivityForResult(create,11);
         });
     }
@@ -185,11 +193,23 @@ public final class MainActivity extends Activity {
             fileCallback.onReceiveValue(selected==null?null:new Uri[]{selected}); fileCallback=null;
             if(cameraUri!=null) revokeUriPermission(cameraUri,Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_READ_URI_PERMISSION);
         }
-        if(request==11 && result==RESULT_OK && data!=null && data.getData()!=null) saveDownload(data.getData());
+        if(request==11) {
+            if(result==RESULT_OK && data!=null && data.getData()!=null) {
+                Uri destination=data.getData();
+                try {getContentResolver().takePersistableUriPermission(destination,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));}
+                catch(SecurityException ignored) {}
+                saveDownload(destination);
+            } else if(isTransfer(downloadUrl)) showStatus("Save cancelled. The Pi keeps its files.");
+        }
     }
+    private boolean isTransfer(String url) {
+        return url!=null && Uri.parse(url).getPath()!=null && Uri.parse(url).getPath().matches("/api/transfers/[0-9a-f]{32}/archive");
+    }
+    private void onUi(Runnable action) {runOnUiThread(()->{if(!isFinishing() && !isDestroyed())action.run();});}
     private void saveDownload(Uri destination) {
         final String selected=downloadUrl;
         if(selected==null || !permitted(Uri.parse(selected))) return;
+        if(isTransfer(selected)) {saveTransfer(destination,selected);return;}
         showStatus("Saving file from the Pi…");
         new Thread(()->{
             HttpURLConnection connection=null;
@@ -206,6 +226,86 @@ public final class MainActivity extends Activity {
             } catch(Exception error) { runOnUiThread(()->showStatus("File was not fully saved. Reconnect to the Pi and retry.")); }
             finally { if(connection!=null) connection.disconnect(); }
         },"eeye-download").start();
+    }
+    private void saveTransfer(Uri destination,String selected) {
+        final String cookie=CookieManager.getInstance().getCookie(selected);
+        showStatus("Saving session. The Pi keeps its copy until the saved file is checked.");
+        new Thread(()->{
+            try {
+                TransferReceiver receiver=new TransferReceiver(getContentResolver(),cookie);
+                TransferReceiver.Saved saved=receiver.receive(destination,selected);
+                rememberSaved(saved);
+                onUi(()->showStatus("Session saved and checked. Confirming receipt with the Pi…"));
+                try {receiver.acknowledge(saved);}
+                catch(Exception error) {onUi(()->showStatus("File saved and checked. The Pi copy is kept. Open saved files to retry confirmation."));return;}
+                onUi(()->askRelease(saved));
+            } catch(Exception error) {
+                onUi(()->showStatus("Session was not fully saved and checked. The Pi keeps its files. Choose a local folder with space and retry."));
+            }
+        },"eeye-verified-save").start();
+    }
+    private synchronized void rememberSaved(TransferReceiver.Saved saved)throws Exception {
+        JSONArray records=new JSONArray(getPreferences(0).getString("saved_files","[]"));
+        for(int i=0;i<records.length();i++)if(records.getJSONObject(i).getString("uri").equals(saved.uri.toString()))return;
+        records.put(saved.record());
+        if(!getPreferences(0).edit().putString("saved_files",records.toString()).commit())throw new java.io.IOException("Could not remember the saved session");
+    }
+    private void askRelease(TransferReceiver.Saved saved) {
+        showStatus("Session saved and checked. Pi copy kept until you choose Remove from Pi.");
+        new AlertDialog.Builder(this).setTitle("Session saved and checked")
+            .setMessage("Remove the transferred capture and receipt files from the Pi? Keep this saved archive and copy it to your Windows backup.")
+            .setNegativeButton("Keep on Pi",(dialog,which)->showStatus("Session saved. The Pi copy is kept."))
+            .setPositiveButton("Remove from Pi",(dialog,which)->releaseSaved(saved)).show();
+    }
+    private void releaseSaved(TransferReceiver.Saved saved) {
+        if(!permitted(Uri.parse(saved.url))){showStatus("Connect to the original Pi address before releasing its files.");return;}
+        showStatus("Checking the saved file again before requesting Pi cleanup…");
+        final String cookie=CookieManager.getInstance().getCookie(saved.url);
+        new Thread(()->{
+            try {
+                TransferReceiver receiver=new TransferReceiver(getContentResolver(),cookie);
+                TransferReceiver.Saved checked=receiver.readBack(saved.uri,saved.url,saved.manifestHash);
+                receiver.acknowledge(checked);
+                receiver.release(checked);
+                onUi(()->{
+                    showStatus("The Pi confirmed cleanup. Session files are saved on this device.");
+                    if(web.getUrl()!=null && permitted(Uri.parse(web.getUrl())))web.reload();
+                });
+            }catch(Exception error){onUi(()->showStatus("Pi cleanup was not confirmed. Keep the saved file and check the transfer status before retrying."));}
+        },"eeye-release").start();
+    }
+    private void showSavedFiles() {
+        try {
+            JSONArray records=new JSONArray(getPreferences(0).getString("saved_files","[]"));
+            if(records.length()==0){showStatus("No verified session files saved by this app yet.");return;}
+            String[] names=new String[records.length()];
+            for(int i=0;i<names.length;i++)names[i]=records.getJSONObject(i).getString("participant_code")+" · "+(i+1);
+            new AlertDialog.Builder(this).setTitle("Saved session files").setItems(names,(dialog,index)->{
+                try {savedFileActions(records.getJSONObject(index));}catch(Exception error){showStatus("Saved-file information could not be read.");}
+            }).setNegativeButton("Close",null).show();
+        }catch(Exception error){showStatus("The saved-file list could not be read. Use the phone Files app to find your archives.");}
+    }
+    private void savedFileActions(JSONObject record)throws Exception {
+        Uri uri=Uri.parse(record.getString("uri"));String url=record.getString("url"),hash=record.getString("manifest_sha256");
+        new AlertDialog.Builder(this).setTitle(record.getString("participant_code"))
+            .setItems(new String[]{"Open saved archive","Verify file and retry Pi confirmation"},(dialog,index)->{
+                if(index==0){
+                    Intent open=new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/zip").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    try{startActivity(open);}catch(Exception error){showStatus("No archive viewer can open this file. Use the phone Files app.");}
+                }else{
+                    if(!permitted(Uri.parse(url))){showStatus("Connect to the original Pi address before confirming this saved file.");return;}
+                    showStatus("Reopening and checking every saved file…");
+                    final String cookie=CookieManager.getInstance().getCookie(url);
+                    new Thread(()->{
+                        try{
+                            TransferReceiver receiver=new TransferReceiver(getContentResolver(),cookie);
+                            TransferReceiver.Saved saved=receiver.readBack(uri,url,hash);
+                            receiver.acknowledge(saved);
+                            onUi(()->askRelease(saved));
+                        }catch(Exception error){onUi(()->showStatus("Saved file could not be verified or confirmed. The app has not requested Pi cleanup."));}
+                    },"eeye-recheck").start();
+                }
+            }).setNegativeButton("Cancel",null).show();
     }
     @Override public void onBackPressed() { if(web.canGoBack()) web.goBack(); else super.onBackPressed(); }
     @Override protected void onDestroy() {
