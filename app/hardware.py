@@ -1,5 +1,6 @@
 """Single owner of the Pi camera, distance sensor and configured LED output."""
 import atexit
+import math
 import os
 import threading
 import time
@@ -17,35 +18,53 @@ class PiHardware:
         self.sequence = 0
         self.error = None
         self.running = False
-        self.camera = self.sensor = self.led = None
+        self.camera = self.sensor = self.led = self.i2c = None
         self.active_until = 0
-        self.start_lock = threading.Lock()
+        self.start_lock = threading.RLock()
+        self._stop = threading.Event()
+        self._threads = []
+        self._status = dict(camera='not_checked', tof='not_checked', led='not_checked')
         atexit.register(self.close)
 
     def start(self):
         with self.start_lock:
             if self.running:
                 return
+            self.close()
+            if self._threads:
+                raise RuntimeError('Hardware is still stopping. Retry after it has stopped.')
+            with self.condition:
+                self.error = None
+                self._status = dict(camera='not_checked', tof='not_checked', led='not_checked')
+            self._stop = threading.Event()
+            component = 'led'
             try:
-                import board
-                import busio
-                import adafruit_vl53l0x
-                from picamera2 import Picamera2
                 from gpiozero import LED, PWMLED
                 pin = os.environ.get('EEYE_LED_PIN')
                 if not pin:
                     raise RuntimeError('LED pin is not configured. Use the verified device wiring.')
-                offset = os.environ.get('EEYE_TOF_OFFSET_MM')
-                if offset is None:
-                    raise RuntimeError('Sensor-to-camera offset is not configured.')
-                self.offset_mm = float(offset)
                 self.led_duty = float(os.environ['EEYE_LED_DUTY'])
                 if not 0 < self.led_duty <= 1:
                     raise RuntimeError('LED duty must match the verified device setting.')
                 self.led = (LED(int(pin), initial_value=False) if self.led_duty == 1
                             else PWMLED(int(pin), initial_value=0, frequency=800))
-                self.sensor = adafruit_vl53l0x.VL53L0X(busio.I2C(board.SCL, board.SDA))
+                self._status['led'] = 'ok'
+                component = 'tof'
+                offset = os.environ.get('EEYE_TOF_OFFSET_MM')
+                if offset is None:
+                    raise RuntimeError('Sensor-to-camera offset is not configured.')
+                self.offset_mm = float(offset)
+                if not math.isfinite(self.offset_mm):
+                    raise RuntimeError('Sensor-to-camera offset must be a finite measurement.')
+                import board
+                import busio
+                import adafruit_vl53l0x
+                self.i2c = busio.I2C(board.SCL, board.SDA)
+                self.sensor = adafruit_vl53l0x.VL53L0X(self.i2c)
                 self.sensor.measurement_timing_budget = 33000
+                self._status['tof'] = 'starting'
+                component = 'camera'
+                from picamera2 import Picamera2
                 self.camera = Picamera2()
                 config = self.camera.create_video_configuration(
                     main={'size': (640, 480), 'format': 'RGB888'},
@@ -61,24 +80,33 @@ class PiHardware:
                 if controls:
                     self.camera.set_controls(controls)
                 self.camera.start()
+                self._status['camera'] = 'starting'
                 self.running = True
-                self.error = None
-                threading.Thread(target=self._sensor_loop, daemon=True, name='eeye-distance').start()
-                threading.Thread(target=self._camera_loop, daemon=True, name='eeye-camera').start()
+                self._threads = [
+                    threading.Thread(target=self._sensor_loop, args=(self._stop, self.sensor),
+                                     daemon=True, name='eeye-distance'),
+                    threading.Thread(target=self._camera_loop, args=(self._stop, self.camera, self.led),
+                                     daemon=True, name='eeye-camera')]
+                for thread in self._threads:
+                    thread.start()
             except Exception as exc:
                 self.error = str(exc)
+                self._status[component] = 'error'
                 self.close()
                 raise RuntimeError(self.error) from exc
 
-    def _sensor_loop(self):
-        while self.running:
+    def _sensor_loop(self, stop, sensor):
+        while not stop.is_set():
             now = time.monotonic()
             try:
-                raw = float(self.sensor.range)
+                raw = float(sensor.range)
                 cm = (raw + self.offset_mm) / 10 if 0 < raw < 2000 else None
             except Exception:
                 cm = None
             with self.condition:
+                if stop.is_set():
+                    return
+                self._status['tof'] = 'ok' if cm is not None else 'error'
                 if now - self.distance_time >= 0.5:
                     self.stable_since = None
                 self.distance, self.distance_time = cm, now
@@ -87,15 +115,18 @@ class PiHardware:
                     self.stable_since = self.stable_since or now
                 else:
                     self.stable_since = None
-            time.sleep(0.1)
+            stop.wait(0.1)
 
-    def _camera_loop(self):
-        import cv2
+    def _camera_loop(self, stop, camera, led):
+        component = 'camera'
         try:
-            while self.running:
+            import cv2
+            while not stop.is_set():
                 illuminated = time.monotonic() < self.active_until
-                self.led.value = self.led_duty if illuminated else 0
-                request = self.camera.capture_request()
+                component = 'led'
+                led.value = self.led_duty if illuminated else 0
+                component = 'camera'
+                request = camera.capture_request()
                 try:
                     frame = request.make_array('main')
                     metadata = request.get_metadata()
@@ -114,6 +145,8 @@ class PiHardware:
                 if not ok:
                     raise RuntimeError('Could not encode the camera frame.')
                 with self.condition:
+                    if stop.is_set():
+                        return
                     self.sequence += 1
                     now = time.monotonic()
                     self.latest = dict(sequence=self.sequence, jpeg=jpg.tobytes(),
@@ -121,18 +154,31 @@ class PiHardware:
                         sensor_timestamp=sensor_time, illuminated=illuminated,
                         camera_metadata={k: metadata.get(k) for k in
                             ('SensorTimestamp', 'ExposureTime', 'AnalogueGain', 'LensPosition')})
+                    self._status['camera'] = 'ok'
                     self.condition.notify_all()
         except Exception as exc:
-            self.error = str(exc)
-            self.running = False
+            with self.condition:
+                if not stop.is_set():
+                    self.error = str(exc)
+                    self.running = False
+                    stop.set()
+                    self._clear_samples()
+                    self._mark_stopped()
+                    self._status[component] = 'error'
         finally:
-            if self.led:
-                self.led.off()
+            try:
+                led.off()
+            except Exception:
+                pass
+
+    def status(self):
+        with self.condition:
+            return self._status.copy()
 
     def reading(self):
         with self.condition:
             now = time.monotonic()
-            fresh = now - self.distance_time < 0.5
+            fresh = self.running and now - self.distance_time < 0.5
             cm = self.distance if fresh else None
             valid = cm is not None
             return dict(cm=round(cm, 2) if valid else None, valid=valid,
@@ -146,24 +192,51 @@ class PiHardware:
     def frame(self, after=0, timeout=2):
         deadline = time.monotonic() + timeout
         with self.condition:
-            while not self.latest or self.latest['sequence'] <= after:
-                left = deadline-time.monotonic()
-                if left <= 0 or self.error:
+            while True:
+                if not self.running or self.error:
                     raise RuntimeError(self.error or 'Camera stopped providing frames.')
+                if self.latest and self.latest['sequence'] > after:
+                    return self.latest.copy()
+                left = deadline-time.monotonic()
+                if left <= 0:
+                    raise RuntimeError('Camera stopped providing frames.')
                 self.condition.wait(left)
-            return self.latest.copy()
+
+    def _clear_samples(self):
+        self.latest = self.distance = self.stable_since = None
+        self.distance_time = 0
+        self.distance_history.clear()
+        self.condition.notify_all()
+
+    def _mark_stopped(self):
+        for component, state in self._status.items():
+            if state in ('ok', 'starting'):
+                self._status[component] = 'stopped'
 
     def close(self):
-        self.running = False
-        self.active_until = 0
-        if self.led:
-            self.led.off()
-            self.led.close()
-            self.led = None
-        if self.camera:
-            try:
-                self.camera.stop()
-                self.camera.close()
-            except Exception:
-                pass
-            self.camera = None
+        with self.start_lock:
+            with self.condition:
+                self.running = False
+                self._stop.set()
+                self.active_until = 0
+                self._clear_samples()
+                self._mark_stopped()
+            # Every release is independent: a failed stop must not skip close/deinit.
+            for resource, operation in ((self.led, 'off'), (self.camera, 'stop')):
+                if resource is not None:
+                    try:
+                        getattr(resource, operation)()
+                    except Exception:
+                        pass
+            for thread in self._threads:
+                if thread is not threading.current_thread() and thread.is_alive():
+                    thread.join(timeout=2)
+            self._threads = [thread for thread in self._threads if thread.is_alive()]
+            for resource, operation in ((self.camera, 'close'), (self.led, 'close'),
+                                        (self.i2c, 'deinit')):
+                if resource is not None:
+                    try:
+                        getattr(resource, operation)()
+                    except Exception:
+                        pass
+            self.camera = self.sensor = self.led = self.i2c = None

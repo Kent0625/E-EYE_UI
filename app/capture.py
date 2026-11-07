@@ -35,17 +35,23 @@ class CapturePipeline:
         self.lock = threading.Lock()
 
     def health(self):
+        frame_attempted = False
         try:
             self.hardware.start()
+            frame_attempted = True
             self.hardware.frame(timeout=3)
             reading = self.hardware.reading()
             return dict(camera='ok', tof='ok' if reading['valid'] else 'error', led='ok',
                         model='missing', capture_available=reading['valid'],
-                        model_message='Refraction model is not installed. Capture and receipt collection are available.',
+                        model_message='Refraction model is not installed. Receipt collection is available.',
                         capture_busy=self.lock.locked())
         except Exception as exc:
-            return dict(camera='error', tof='error', led='error', model='missing',
-                        capture_available=False, capture_busy=False, hardware_error=str(exc))
+            status = (self.hardware.status() if callable(getattr(self.hardware, 'status', None))
+                      else dict(camera='not_checked', tof='not_checked', led='not_checked'))
+            if frame_attempted and status['camera'] in ('not_checked', 'starting', 'ok'):
+                status['camera'] = 'error'
+            return dict(status, model='missing', capture_available=False,
+                        capture_busy=self.lock.locked(), hardware_error=str(exc))
 
     def start(self, session_id, eye):
         if eye not in ('OD', 'OS'):
