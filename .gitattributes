@@ -1,0 +1,2 @@
+# Raspberry Pi shell scripts must keep Unix line endings on Windows checkouts.
+deploy/*.sh text eol=lf
