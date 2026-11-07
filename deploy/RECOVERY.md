@@ -13,6 +13,10 @@ Code releases live in `/opt/eeye/releases`; `/opt/eeye/current` selects the acti
 
 To roll back an installed release, stop `eeye.service`, inspect `/opt/eeye/previous-release`, switch the current symlink to that exact verified release, then start the service. Restore a SQLite snapshot only while the service is stopped and after preserving newer records. Do not copy a live SQLite file without its WAL; use Python's SQLite backup API.
 
+The connected-device storage update adds `activate.sh` and `rollback.sh`. Activation snapshots stopped-service data/config and automatically selects the previous code if the new storage API is not ready in real mode. To select the prior code while keeping current records, run `sudo bash /opt/eeye/current/deploy/rollback.sh`. The script prints a pre-rollback snapshot path. For an explicitly chosen data restoration, pass `--restore-data /var/lib/eeye-snapshots/<exact-snapshot>` and optionally an exact release path. Newer data is moved into the pre-rollback snapshot before restoration; it is not erased. Files previously offloaded to a phone/laptop stay on that device and must be retained there.
+
+A fresh baseline before this update is on Windows in `Documents\E-Eye Backups\pre-device-storage-20261108`, including current app/data/config/unit and release pointers. SHA-256 `885f296662bb7e11eb8b34f5dc7a13b5102432bbfb70883a29ac1eec80df3eff` matches the Pi archive. The original full backup remains available separately.
+
 Keep the laptop hotspot connection during initial deployment. No hotspot change has been applied by these scripts. A Pi-hosted hotspot needs a separate connection test and recovery route before activation.
 
 The refraction prediction model is not supplied. The pipeline stores real captures and confirmed receipt ground truth but does not manufacture sphere, cylinder, or a no-referral result. Quality filtering also needs the verified pupil model and eye crop. Google Play publication and a signed Android release remain separate deployment steps.

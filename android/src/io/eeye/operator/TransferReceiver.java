@@ -18,11 +18,13 @@ import java.util.Map;
 public final class TransferReceiver {
     public static final class Saved {
         public final Uri uri;
-        public final String url, manifestHash;
+        public final String url, manifestHash, archiveHash;
+        public final long archiveBytes;
         public final JSONObject manifest;
-        Saved(Uri uri,String url,String hash,JSONObject manifest) {this.uri=uri;this.url=url;this.manifestHash=hash;this.manifest=manifest;}
+        Saved(Uri uri,String url,String hash,String archiveHash,long archiveBytes,JSONObject manifest) {this.uri=uri;this.url=url;this.manifestHash=hash;this.archiveHash=archiveHash;this.archiveBytes=archiveBytes;this.manifest=manifest;}
         public JSONObject record()throws Exception {
             return new JSONObject().put("uri",uri.toString()).put("url",url).put("manifest_sha256",manifestHash)
+                .put("archive_sha256",archiveHash).put("archive_bytes",archiveBytes)
                 .put("participant_code",manifest.getString("participant_code"));
         }
     }
@@ -43,11 +45,16 @@ public final class TransferReceiver {
     }
     public Saved receive(Uri destination,String address)throws Exception {
         URL url=archiveUrl(address);HttpURLConnection connection=open(url);
-        String expected;
+        String expected,archiveHash;long archiveBytes;
         try {
             if(connection.getResponseCode()!=200)throw new IOException("The Pi could not provide this transfer");
             expected=connection.getHeaderField("X-EEye-Manifest-SHA256");
             if(!ArchiveVerifier.validHash(expected))throw new IOException("The Pi did not provide a valid manifest checksum");
+            archiveHash=connection.getHeaderField("X-EEye-Archive-SHA256");
+            if(!ArchiveVerifier.validHash(archiveHash))throw new IOException("The Pi did not provide a valid archive checksum");
+            try {archiveBytes=Long.parseLong(connection.getHeaderField("X-EEye-Archive-Bytes"));}
+            catch(Exception error){throw new IOException("The Pi did not provide a valid archive byte count");}
+            if(archiveBytes<=0)throw new IOException("The Pi did not provide a valid archive byte count");
             long total=0,length=connection.getContentLengthLong();
             try(InputStream input=connection.getInputStream();OutputStream output=resolver.openOutputStream(destination,"w")) {
                 if(output==null)throw new IOException("The selected file cannot be written");
@@ -55,11 +62,11 @@ public final class TransferReceiver {
                 while((count=input.read(buffer))!=-1){output.write(buffer,0,count);total+=count;}
                 output.flush();
             }
-            if(length>=0 && total!=length)throw new IOException("The transfer ended before every byte arrived");
+            if(total!=archiveBytes || (length>=0 && total!=length))throw new IOException("The transfer ended before every byte arrived");
         } finally {connection.disconnect();}
-        return readBack(destination,address,expected);
+        return readBack(destination,address,expected,archiveHash,archiveBytes);
     }
-    public Saved readBack(Uri uri,String address,String expected)throws Exception {
+    public Saved readBack(Uri uri,String address,String expected,String archiveHash,long archiveBytes)throws Exception {
         URL url=archiveUrl(address);byte[] raw;
         try(InputStream input=resolver.openInputStream(uri)) {
             if(input==null)throw new IOException("The saved file cannot be reopened");
@@ -75,11 +82,8 @@ public final class TransferReceiver {
             JSONObject file=files.getJSONObject(i);String path=file.getString("path");
             if(expectedFiles.put(path,new ArchiveVerifier.Entry(file.getLong("bytes"),file.getString("sha256")))!=null)throw new IOException("Manifest repeats a file");
         }
-        try(InputStream input=resolver.openInputStream(uri)) {
-            if(input==null)throw new IOException("The saved file cannot be reopened");
-            ArchiveVerifier.verify(input,expectedFiles,expected);
-        }
-        return new Saved(uri,address,expected,manifest);
+        ArchiveVerifier.verify(()->resolver.openInputStream(uri),expectedFiles,expected,archiveHash,archiveBytes);
+        return new Saved(uri,address,expected,archiveHash,archiveBytes,manifest);
     }
     public void acknowledge(Saved saved)throws Exception {post(saved,"ack");}
     public void release(Saved saved)throws Exception {post(saved,"release");}

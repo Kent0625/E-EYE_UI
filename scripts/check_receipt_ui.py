@@ -116,8 +116,7 @@ with tempfile.TemporaryDirectory() as temporary:
             page.reload()
             page.locator('#receipt-preview').wait_for(state='visible')
             assert page.locator('#gt-os-sphere').input_value() == '0.25'
-            page.locator('#reference-method').select_option('three_readings')
-            page.screenshot(path=str(output / 'mobile-three-readings.png'))
+            assert page.locator('#reference-method option[value="three_readings"]').count() == 0
             assert not errors, errors
             assert not external_requests, external_requests
             browser.close()

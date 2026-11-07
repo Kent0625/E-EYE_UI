@@ -21,7 +21,7 @@ import shutil
 DEVICE_NAME = os.environ.get("EEYE_DEVICE_NAME", "E-EYE-PROTOTYPE-01")
 DEVICE_SSID = os.environ.get("EEYE_SSID", "E-Eye-Field-01")
 DEVICE_IP = os.environ.get("EEYE_IP", "192.168.4.1")
-SOFTWARE_VERSION = "v1.1.0"
+SOFTWARE_VERSION = "v1.2.0"
 
 # Hardware calibration values (read from config/env; defaults to empty if unrecorded)
 TOF_CALIBRATED_DATE = os.environ.get("EEYE_TOF_CAL_DATE", "")

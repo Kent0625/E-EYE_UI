@@ -202,7 +202,7 @@ def main():
             project = Path(__file__).resolve().parent.parent
             bundle = project/'output'/'eeye-release.tar.gz'
             with tarfile.open(bundle,'w:gz') as tar:
-                for name in ('app','deploy','requirements.txt'):
+                for name in ('app','eeye_storage','deploy','requirements.txt','pyproject.toml'):
                     tar.add(project/name,arcname=name,filter=lambda info: None if '__pycache__' in info.name or info.name.endswith('.pyc') else info)
             with client.open_sftp() as sftp:
                 sftp.put(str(bundle),'/tmp/eeye-release.tar.gz')

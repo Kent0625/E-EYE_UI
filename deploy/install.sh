@@ -15,18 +15,5 @@ if ! "$release/.venv/bin/python" -c 'import board,busio,adafruit_vl53l0x'; then
  "$release/.venv/bin/pip" install Adafruit-Blinka adafruit-circuitpython-vl53l0x
 fi
 "$release/.venv/bin/python" -c 'import picamera2,cv2,gpiozero,board,busio,adafruit_vl53l0x'
-if systemctl is-active --quiet eeye.service; then systemctl stop eeye.service; fi
-snapshot="/var/lib/eeye-snapshots/$(date +%Y%m%d-%H%M%S)"
-install -d -m 700 "$snapshot"
-cp -a /var/lib/eeye "$snapshot/data"
-if [ -f /etc/eeye/device.env ]; then cp -a /etc/eeye/device.env "$snapshot/device.env"; fi
-if [ -e /opt/eeye/current ]; then
- readlink -f /opt/eeye/current > /opt/eeye/previous-release
-fi
-ln -sfn "$release" /opt/eeye/current.next
-mv -Tf /opt/eeye/current.next /opt/eeye/current
-install -m 644 "$release/deploy/eeye.service" /etc/systemd/system/eeye.service
-systemctl daemon-reload
-systemctl enable --now eeye.service
-systemctl restart eeye.service
-systemctl is-active eeye.service
+"$release/.venv/bin/python" -c 'import sys; sys.path.insert(0,sys.argv[1]); from eeye_storage import verify_archive' "$release"
+bash "$release/deploy/activate.sh" "$release"

@@ -81,8 +81,10 @@ def database_busy(error):
 
 
 def receipt_metadata(row):
+    from app.transfers import external_location_for_receipt
     receipt = dict(row)
     receipt['image_url'] = url_for('receipts.get_receipt_image', id=row['session_id'], receipt_id=row['id'])
+    receipt['external_storage'] = external_location_for_receipt(row['id'])
     return receipt
 
 
@@ -145,6 +147,12 @@ def get_receipt_image(id, receipt_id):
     with store.get_connection() as db:
         receipt = db.execute('SELECT * FROM receipts WHERE id = ? AND session_id = ?', (receipt_id, id)).fetchone()
     path = receipt_directory() / receipt_id
+    if receipt is not None:
+        from app.transfers import external_location_for_receipt
+        location = external_location_for_receipt(receipt_id)
+        if location:
+            return jsonify(error='Receipt saved on '+location['device_label']+'. Open the saved archive on that device.',
+                           external_storage=location), 410
     if receipt is None or not path.is_file():
         return jsonify(error='Receipt photo is missing. Attach it again.'), 404
     response = send_file(path, mimetype=receipt['mime_type'], conditional=False)
@@ -260,6 +268,8 @@ def delete_session_receipts(session_id=None):
     """Call as part of a confirmed session deletion, including delete-all."""
     with store.get_connection() as db:
         db.execute('BEGIN IMMEDIATE')
+        from app.transfers import delete_transfer_rows, cleanup_paths
+        transfer_paths = delete_transfer_rows(db, session_id)
         where, params = (' WHERE session_id = ?', (session_id,)) if session_id else ('', ())
         rows = db.execute('SELECT id FROM receipts' + where, params).fetchall()
         db.execute('DELETE FROM ground_truth_audit' + where, params)
@@ -272,4 +282,5 @@ def delete_session_receipts(session_id=None):
     for row in rows:
         if RECEIPT_ID.fullmatch(row['id']):
             (root / row['id']).unlink(missing_ok=True)
+    cleanup_paths(transfer_paths)
     return deleted

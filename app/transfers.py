@@ -42,7 +42,8 @@ def init_transfers_db():
             id TEXT PRIMARY KEY, session_id TEXT NOT NULL, state TEXT NOT NULL,
             device_id TEXT NOT NULL, device_label TEXT NOT NULL, manifest_sha256 TEXT NOT NULL,
             token_sha256 TEXT NOT NULL, snapshot_sha256 TEXT NOT NULL,
-            created_at TEXT NOT NULL, verified_at TEXT, released_at TEXT);
+            created_at TEXT NOT NULL, verified_at TEXT, released_at TEXT,
+            archive_sha256 TEXT, archive_bytes INTEGER);
           CREATE INDEX IF NOT EXISTS storage_transfer_session ON storage_transfers(session_id);
           CREATE TABLE IF NOT EXISTS storage_transfer_files (
             transfer_id TEXT NOT NULL, archive_path TEXT NOT NULL, source_path TEXT NOT NULL,
@@ -52,11 +53,19 @@ def init_transfers_db():
             receipt_id TEXT PRIMARY KEY, transfer_id TEXT NOT NULL, device_id TEXT NOT NULL,
             device_label TEXT NOT NULL, verified_at TEXT NOT NULL);
         ''')
+        columns={row['name'] for row in db.execute('PRAGMA table_info(storage_transfers)')}
+        for name,kind in (('archive_sha256','TEXT'),('archive_bytes','INTEGER')):
+            if name not in columns: db.execute('ALTER TABLE storage_transfers ADD COLUMN '+name+' '+kind)
+        for row in db.execute('SELECT id FROM storage_transfers WHERE archive_sha256 IS NULL').fetchall():
+            path=transfer_root()/(row['id']+'.zip')
+            if _ID.fullmatch(row['id']) and path.is_file() and not path.is_symlink():
+                db.execute('UPDATE storage_transfers SET archive_sha256=?,archive_bytes=? WHERE id=?',
+                           (file_digest(path),path.stat().st_size,row['id']))
         pending = db.execute("SELECT id FROM storage_transfers WHERE state='releasing'").fetchall()
         for row in pending:
             _restore_quarantine(db, row['id'])
             db.execute("UPDATE storage_transfers SET state='verified' WHERE id=?", (row['id'],))
-        finished = db.execute("SELECT id FROM storage_transfers WHERE state='released'").fetchall()
+        finished = db.execute("SELECT id FROM storage_transfers WHERE state IN ('released','superseded')").fetchall()
         for row in finished:
             _remove_finished_payload(db, row['id'])
 
@@ -123,17 +132,32 @@ def _controlled_file(root, relative):
     return resolved
 
 
-def _archive_inputs(snapshot):
+def _archive_inputs(db, snapshot):
     session = snapshot['session']
     eyes = json.loads(session['eyes_data'] or '{}')
     files = [ArchiveFile('metadata/session.json', content=canonical_json(dict(
         session, eyes=eyes))), ArchiveFile('metadata/reference-audit.json', content=canonical_json(snapshot['reference_audit']))]
+    references = {}
+    def reference(row, kind, identifier):
+        item=references.setdefault(row['id'],dict(transfer_id=row['id'],manifest_sha256=row['manifest_sha256'],
+            archive_sha256=row['archive_sha256'],device_id=row['device_id'],device_label=row['device_label'],
+            capture_ids=[],receipt_ids=[]))
+        item[kind].append(identifier)
     capture_ids = {eye.get('capture_id') for eye in eyes.values() if isinstance(eye, dict) and eye.get('capture_id')}
     capture_ids.update(job['id'] for job in snapshot['capture_jobs'])
     for capture_id in sorted(capture_ids):
         if not _ID.fullmatch(capture_id):
             raise TransferConflict('Invalid capture identity. Files were kept on the Pi.')
         folder = Path(config.CAPTURE_FOLDER) / capture_id
+        if folder.is_symlink():
+            raise TransferConflict('A capture path is a symbolic link. Files were kept on the Pi.')
+        previous=db.execute('''SELECT DISTINCT t.* FROM storage_transfers t
+            JOIN storage_transfer_files f ON f.transfer_id=t.id
+            WHERE t.session_id=? AND t.state='released' AND f.archive_path LIKE ?
+            ORDER BY t.released_at DESC LIMIT 1''',(session['id'],'captures/'+capture_id+'/%')).fetchone()
+        if previous and (not folder.exists() or (folder.is_dir() and not any(folder.iterdir()))):
+            reference(previous,'capture_ids',capture_id)
+            continue
         if folder.is_symlink() or not folder.is_dir():
             raise TransferConflict('Capture files were already moved or are missing. Open the saved device archive.')
         count = 0
@@ -151,6 +175,12 @@ def _archive_inputs(snapshot):
         receipt_id = receipt['id']
         if not _ID.fullmatch(receipt_id):
             raise TransferConflict('Invalid receipt identity. Files were kept on the Pi.')
+        location=db.execute('''SELECT t.* FROM storage_receipt_locations l
+            JOIN storage_transfers t ON t.id=l.transfer_id WHERE l.receipt_id=? AND t.state='released' ''',
+            (receipt_id,)).fetchone()
+        if location and not (receipt_directory()/receipt_id).exists():
+            reference(location,'receipt_ids',receipt_id)
+            continue
         source = _controlled_file(receipt_directory(), receipt_id)
         if source.stat().st_size != receipt['byte_size'] or file_digest(source) != receipt['sha256']:
             raise TransferConflict('A receipt differs from its saved record. Files were kept on the Pi.')
@@ -158,9 +188,11 @@ def _archive_inputs(snapshot):
         files.append(ArchiveFile('receipts/'+receipt_id+suffix, source=source))
     files.append(ArchiveFile('metadata/receipts.json', content=canonical_json(snapshot['receipts'])))
     files.append(ArchiveFile('metadata/capture-jobs.json', content=canonical_json(snapshot['capture_jobs'])))
+    files.append(ArchiveFile('metadata/external-archives.json',content=canonical_json(list(references.values()))))
     files.append(ArchiveFile('README.txt', content=(
         'E-Eye saved session\nOriginal capture files: captures/\nOriginal autorefractor receipts: receipts/\n'
         'Session values and reference audit: metadata/\nVerify this archive before removing any Pi copy.\n'
+        'Earlier offloaded files are listed in metadata/external-archives.json. Keep those saved archives too.\n'
         'A transfer acknowledgement is not a second backup. Copy important sessions to Windows or another drive.\n').encode()))
     return files
 
@@ -169,7 +201,8 @@ def _public(row):
     return dict(id=row['id'], session_id=row['session_id'], state=row['state'], device_id=row['device_id'],
         device_label=row['device_label'], manifest_sha256=row['manifest_sha256'], created_at=row['created_at'],
         verified_at=row['verified_at'], released_at=row['released_at'],
-        download_url='/api/transfers/'+row['id']+'/archive' if row['state'] != 'released' else None)
+        archive_sha256=row['archive_sha256'],archive_bytes=row['archive_bytes'],
+        download_url='/api/transfers/'+row['id']+'/archive' if row['state'] not in ('released','superseded') else None)
 
 
 @transfers_bp.get('/api/storage/status')
@@ -196,6 +229,7 @@ def session_transfers(id):
         return jsonify(error='Use a device identifier under 128 characters and a device name under 80 characters.'), 400
     token, transfer_id = secrets.token_urlsafe(32), uuid.uuid4().hex
     root = transfer_root(); archive_path = root/(transfer_id+'.zip')
+    archive_created=False
     try:
         with mutation_guard(), store.get_connection() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -207,7 +241,7 @@ def session_transfers(id):
                 prepared=root/(existing['id']+'.zip')
                 if prepared.is_file() and not prepared.is_symlink():
                     return jsonify(_public(existing)),201
-            files = _archive_inputs(snapshot)
+            files = _archive_inputs(db, snapshot)
             required = sum(entry.source.stat().st_size if entry.source else len(entry.content) for entry in files)
             if shutil.disk_usage(root).free < required + 64*1024**2:
                 raise TransferConflict('Not enough Pi storage to prepare a safe transfer. Existing files were kept.')
@@ -215,9 +249,15 @@ def session_transfers(id):
             manifest, manifest_hash = create_archive(archive_path, dict(transfer_id=transfer_id, session_id=id,
                 participant_code=snapshot['session']['participant_code'],device_id=device_id,device_label=label,
                 created_at=now,ack_token=token), files)
-            db.execute('INSERT INTO storage_transfers VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            archive_created=True
+            archive_hash=file_digest(archive_path)
+            archive_bytes=archive_path.stat().st_size
+            db.execute('''INSERT INTO storage_transfers
+                (id,session_id,state,device_id,device_label,manifest_sha256,token_sha256,
+                 snapshot_sha256,created_at,verified_at,released_at,archive_sha256,archive_bytes)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (transfer_id,id,'ready',device_id,label,manifest_hash,hashlib.sha256(token.encode()).hexdigest(),
-                 snapshot_hash,now,None,None))
+                 snapshot_hash,now,None,None,archive_hash,archive_bytes))
             by_name = {entry['path']:entry for entry in manifest['files']}
             for entry in files:
                 if entry.source is not None:
@@ -228,10 +268,10 @@ def session_transfers(id):
             row = db.execute('SELECT * FROM storage_transfers WHERE id=?',(transfer_id,)).fetchone()
         return jsonify(_public(row)), 201
     except (ValueError, OSError) as error:
-        archive_path.unlink(missing_ok=True)
+        if archive_created: archive_path.unlink(missing_ok=True)
         raise TransferConflict(str(error)) from error
     except Exception:
-        archive_path.unlink(missing_ok=True)
+        if archive_created: archive_path.unlink(missing_ok=True)
         raise
 
 
@@ -247,6 +287,8 @@ def transfer_archive(transfer_id):
         row = _transfer_row(db,transfer_id)
     if row is None:
         return jsonify(error='Transfer not found.'),404
+    if row['state'] == 'superseded':
+        return jsonify(error='This preparation was replaced after a verified save. Check the session saved-device locations.'),410
     if row['state'] == 'released':
         return jsonify(error='Files are saved on '+row['device_label']+'. Open that device archive.'),410
     path=transfer_root()/(transfer_id+'.zip')
@@ -255,6 +297,8 @@ def transfer_archive(transfer_id):
     response=send_file(path,mimetype='application/zip',as_attachment=True,
                        download_name='eeye-session-'+transfer_id+'.zip',conditional=True)
     response.headers['X-EEye-Manifest-SHA256']=row['manifest_sha256']
+    response.headers['X-EEye-Archive-SHA256']=row['archive_sha256']
+    response.headers['X-EEye-Archive-Bytes']=str(row['archive_bytes'])
     response.headers['Cache-Control']='no-store'
     return response
 
@@ -378,18 +422,29 @@ def release_transfer(transfer_id):
                         quarantine.parent.mkdir(parents=True,exist_ok=True)
                         os.replace(source,quarantine)
                 location=dict(transfer_id=transfer_id,device_id=row['device_id'],device_label=row['device_label'],verified_at=row['verified_at'])
+                exported_captures=set()
+                exported_receipts=set()
+                for source_row in _source_rows(db,transfer_id):
+                    parts=source_row['archive_path'].split('/')
+                    if parts[0]=='captures': exported_captures.add(parts[1])
+                    if parts[0]=='receipts': exported_receipts.add(Path(parts[1]).stem)
                 eyes=json.loads(snapshot['session']['eyes_data'] or '{}')
                 for eye in eyes.values():
-                    if isinstance(eye,dict) and eye.get('capture_id'):
+                    if isinstance(eye,dict) and eye.get('capture_id') in exported_captures:
                         eye['external_storage']=location
                 db.execute('UPDATE sessions SET eyes_data=? WHERE id=?',(json.dumps(eyes),row['session_id']))
                 for receipt in snapshot['receipts']:
+                    if receipt['id'] not in exported_receipts: continue
                     db.execute('INSERT OR REPLACE INTO storage_receipt_locations VALUES (?,?,?,?,?)',
                         (receipt['id'],transfer_id,row['device_id'],row['device_label'],row['verified_at']))
                 db.execute("UPDATE storage_transfers SET state='released',released_at=? WHERE id=?",
                            (datetime.now(timezone.utc).isoformat(),transfer_id))
+                db.execute("UPDATE storage_transfers SET state='superseded' WHERE session_id=? AND id<>? AND state IN ('ready','verified')",
+                           (row['session_id'],transfer_id))
             with store.get_connection() as db:
                 _remove_finished_payload(db,transfer_id)
+                for other in db.execute("SELECT id FROM storage_transfers WHERE session_id=? AND state='superseded'",(row['session_id'],)):
+                    _remove_finished_payload(db,other['id'])
                 return jsonify(_public(_transfer_row(db,transfer_id)))
         except Exception:
             with store.get_connection() as db:

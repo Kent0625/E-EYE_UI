@@ -15,7 +15,7 @@ def main():
     try:
         result=receive_session(args.url,args.session,args.destination,args.device_label,args.release)
     except Exception as error:
-        parser.exit(1,'Transfer not completed: '+str(error)+'\nPi files were not automatically discarded.\n')
+        parser.exit(1,'Transfer not completed: '+str(error)+'\nKeep any saved archive. If release was requested, reconnect and rerun to confirm its status.\n')
     print('Saved and verified: '+result['path'])
     print('Pi originals released.' if result['pi_files_released'] else 'Pi originals retained. This verified file is not a second backup.')
 

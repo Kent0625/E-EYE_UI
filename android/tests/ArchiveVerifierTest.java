@@ -24,13 +24,16 @@ public final class ArchiveVerifierTest {
         return result;
     }
     static void rejected(byte[] zip,Map<String,ArchiveVerifier.Entry> expected,String digest)throws Exception {
-        try { ArchiveVerifier.verify(new ByteArrayInputStream(zip),expected,digest); throw new AssertionError("Accepted invalid archive"); } catch(IOException good) {}
+        rejected(zip,expected,digest,hash(zip),zip.length);
+    }
+    static void rejected(byte[] zip,Map<String,ArchiveVerifier.Entry> expected,String digest,String archiveHash,long archiveBytes)throws Exception {
+        try { ArchiveVerifier.verify(()->new ByteArrayInputStream(zip),expected,digest,archiveHash,archiveBytes); throw new AssertionError("Accepted invalid archive"); } catch(IOException good) {}
     }
     public static void main(String[] args)throws Exception {
         byte[] frame={1,2,3,4};
         Map<String,ArchiveVerifier.Entry> expected=new HashMap<>(); expected.put("captures/frame.jpg",new ArchiveVerifier.Entry(frame.length,hash(frame)));
         byte[] valid=zip("captures/frame.jpg",frame);
-        ArchiveVerifier.verify(new ByteArrayInputStream(valid),expected,hash(manifest));
+        ArchiveVerifier.verify(()->new ByteArrayInputStream(valid),expected,hash(manifest),hash(valid),valid.length);
         if(!Arrays.equals(manifest,ArchiveVerifier.readManifest(new ByteArrayInputStream(valid),hash(manifest))))throw new AssertionError();
         rejected(zip("captures/frame.jpg",new byte[]{9,2,3,4}),expected,hash(manifest));
         rejected(zip("../frame.jpg",frame),expected,hash(manifest));
@@ -38,8 +41,15 @@ public final class ArchiveVerifierTest {
         rejected(valid,expected,hash(frame));
         rejected(duplicate(frame),expected,hash(manifest));
         Map<String,ArchiveVerifier.Entry> missing=new HashMap<>(expected);missing.put("receipt.png",new ArchiveVerifier.Entry(1,hash(new byte[]{1})));rejected(valid,missing,hash(manifest));
-        expected.put("captures/frame.jpg",new ArchiveVerifier.Entry(3,hash(frame)));rejected(valid,expected,hash(manifest));
-        rejected(Arrays.copyOf(valid,valid.length/2),expected,hash(manifest));
+        rejected(Arrays.copyOf(valid,valid.length-22),expected,hash(manifest),hash(valid),valid.length);
+        int central=-1;for(int i=0;i<valid.length-4;i++)if(valid[i]==80 && valid[i+1]==75 && valid[i+2]==1 && valid[i+3]==2){central=i;break;}
+        if(central<0)throw new AssertionError("Central directory missing from valid test ZIP");
+        rejected(Arrays.copyOf(valid,central),expected,hash(manifest),hash(valid),valid.length);
+        rejected(Arrays.copyOf(valid,valid.length/2),expected,hash(manifest),hash(valid),valid.length);
+        byte[] appended=Arrays.copyOf(valid,valid.length+1);
+        rejected(appended,expected,hash(manifest),hash(valid),valid.length);
+        Map<String,ArchiveVerifier.Entry> wrongSize=new HashMap<>(expected);
+        wrongSize.put("captures/frame.jpg",new ArchiveVerifier.Entry(3,hash(frame)));rejected(valid,wrongSize,hash(manifest));
         System.out.println("PASS: archive readback, hash, path, unexpected/missing entry, byte count and truncated data checks");
     }
 }

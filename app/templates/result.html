@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/storage-transfer.css') }}">
 {% if research_mode %}<link rel="stylesheet" href="{{ url_for('static', filename='css/receipt.css') }}">{% endif %}
 {% endblock %}
 
@@ -85,7 +86,9 @@
       <p class="eye-retake-error">Capture saved. Prediction unavailable.</p>
       {% if eye_data.message %}<p class="form-hint">{{ eye_data.message }}</p>{% endif %}
       <p class="eye-quality-line numeric">{{ eye_data.frames_total }} frames captured.{% if eye_data.quality_status == 'passed' %} {{ eye_data.frames_used }} frames selected.{% else %} Quality filtering: {{ eye_data.quality_status }}.{% endif %}</p>
-      {% if eye_data.capture_id %}
+      {% if eye_data.external_storage %}
+        <p>Saved on {{ eye_data.external_storage.device_label }}. Open the saved archive on that device.</p>
+      {% elif eye_data.capture_id %}
         <a href="/api/sessions/{{ session_id }}/captures/{{ eye_data.capture_id }}/download" class="btn btn-secondary btn-block">Download {{ eye_key }} capture</a>
       {% endif %}
       <a href="/screen/{{ session_id }}/{{ eye_key }}" class="btn btn-secondary btn-block">Retake {{ eye_key }}</a>
@@ -331,6 +334,21 @@
       <!-- Ground Truth Section (Rendered when Research Mode is enabled) -->
       {{ render_ground_truth(s, od, os_eye) }}
 
+      <section class="card storage-transfer" id="storage-transfer" data-session-id="{{ s.id }}" aria-labelledby="storage-transfer-title">
+        <h3 class="card-title" id="storage-transfer-title">Save session to a phone or computer</h3>
+        <p>Save the captures, receipt and recorded values together in one archive.</p>
+        <label for="storage-device-label">Name this storage device</label>
+        <input id="storage-device-label" class="form-input" type="text" maxlength="60" placeholder="For example, research phone" autocomplete="off">
+        <div class="storage-actions">
+          <button id="storage-prepare" type="button" class="btn btn-secondary">Prepare session archive</button>
+          <a id="storage-download" class="btn btn-primary" hidden download>Save to this device</a>
+        </div>
+        <p id="storage-feedback" role="status" aria-live="polite">The Pi keeps its files until a saved copy is checked.</p>
+        <p class="form-hint">Browser downloads keep the Pi copy. The Android app checks the saved file and asks before removing transferred files from the Pi.</p>
+        <p class="form-hint">Keep earlier saved archives too if you add a retake or another receipt later.</p>
+        <ul id="storage-locations" hidden aria-label="Saved device copies"></ul>
+      </section>
+
       <!-- Mobile/Tablet Metadata & Actions (hidden >= 1024px) -->
       <div class="result-mobile-bottom-panel">
         {{ render_meta_and_actions(s, od, os_eye) }}
@@ -341,6 +359,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/storage-transfer.js') }}"></script>
 {% if research_mode %}
 <script src="{{ url_for('static', filename='vendor/ocr/tesseract.min.js') }}" defer></script>
 <script type="module" src="{{ url_for('static', filename='js/receipt.js') }}"></script>

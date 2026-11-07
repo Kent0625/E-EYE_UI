@@ -12,6 +12,15 @@ from app.capture import init_capture_db
 from app.receipts import init_receipts_db
 
 
+def test_archive_creation_does_not_remove_a_preexisting_user_file(tmp_path):
+    from eeye_storage import ArchiveFile, create_archive
+    target=tmp_path/'already-saved.zip'
+    target.write_bytes(b'important-existing-user-file')
+    with pytest.raises(FileExistsError):
+        create_archive(target,{'transfer_id':'test'},[ArchiveFile('record.json',content=b'{}')])
+    assert target.read_bytes()==b'important-existing-user-file'
+
+
 @pytest.fixture
 def transfer_app(tmp_path, monkeypatch):
     monkeypatch.setattr(store, 'DATABASE_PATH', str(tmp_path/'state.db'))
@@ -49,9 +58,52 @@ def start(client):
     return result.json
 
 
+def test_retake_after_offload_exports_new_files_and_references_earlier_archive(transfer_app):
+    app,root=transfer_app; client=client_for(app)
+    first=start(client); body,_=proof(client,first)
+    assert client.post('/api/transfers/'+first['id']+'/ack',json=body).status_code==200
+    assert client.post('/api/transfers/'+first['id']+'/release',json=body).status_code==200
+    new_id='c'*32
+    folder=root/'captures'/new_id; folder.mkdir()
+    (folder/'0000.jpg').write_bytes(b'new-synthetic-frame')
+    store.update_session('test-session',eyes={'OD':{'status':'captured','capture_id':new_id},'OS':{'status':'not_recorded'}})
+    with store.get_connection() as db:
+        db.execute('INSERT INTO capture_jobs(id,session_id,eye,state,payload) VALUES (?,?,?,?,?)',
+                   (new_id,'test-session','OD','complete','{}'))
+    second=start(client)
+    second_body,raw=proof(client,second)
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        references=json.loads(archive.read('metadata/external-archives.json'))
+        assert references[0]['transfer_id']==first['id']
+        assert references[0]['capture_ids']==['a'*32]
+        assert references[0]['receipt_ids']==['b'*32]
+        assert 'captures/'+new_id+'/0000.jpg' in archive.namelist()
+        assert 'captures/'+'a'*32+'/0000.jpg' not in archive.namelist()
+    assert client.post('/api/transfers/'+second['id']+'/ack',json=second_body).status_code==200
+    assert client.post('/api/transfers/'+second['id']+'/release',json=second_body).status_code==200
+    with store.get_connection() as db:
+        assert db.execute('SELECT transfer_id FROM storage_receipt_locations WHERE receipt_id=?',('b'*32,)).fetchone()[0]==first['id']
+    assert store.get_session('test-session')['eyes']['OD']['external_storage']['transfer_id']==second['id']
+
+
+def test_release_clears_redundant_prepared_copies_without_deleting_user_archives(transfer_app):
+    app,root=transfer_app; client=client_for(app)
+    first=start(client); body,raw=proof(client,first)
+    local=root/'already-saved-on-laptop.zip'; local.write_bytes(raw)
+    other=client.post('/api/sessions/test-session/transfers',json={'device_id':'other-device','device_label':'Other phone'}).json
+    assert client.post('/api/transfers/'+first['id']+'/ack',json=body).status_code==200
+    assert client.post('/api/transfers/'+first['id']+'/release',json=body).status_code==200
+    assert not (root/'data/transfers'/(other['id']+'.zip')).exists()
+    assert local.read_bytes()==raw
+    assert client.get(other['download_url']).status_code==410
+
+
 def proof(client, transfer):
     response=client.get(transfer['download_url'])
     assert response.status_code==200
+    assert response.headers['X-EEye-Archive-SHA256']==hashlib.sha256(response.data).hexdigest()
+    assert int(response.headers['X-EEye-Archive-Bytes'])==len(response.data)
+    assert transfer['archive_sha256']==response.headers['X-EEye-Archive-SHA256']
     with zipfile.ZipFile(io.BytesIO(response.data)) as z:
         raw=z.read('transfer-manifest.json'); manifest=json.loads(raw)
         assert hashlib.sha256(raw).hexdigest()==response.headers['X-EEye-Manifest-SHA256']
@@ -249,7 +301,9 @@ def test_incomplete_download_never_acknowledges_and_can_resume(transfer_app):
         response.direct_passthrough=False
         body=response.get_data()
         return Response(body[:len(body)//2],mimetype='application/zip',headers={
-            'X-EEye-Manifest-SHA256':response.headers['X-EEye-Manifest-SHA256']})
+            'X-EEye-Manifest-SHA256':response.headers['X-EEye-Manifest-SHA256'],
+            'X-EEye-Archive-SHA256':response.headers.get('X-EEye-Archive-SHA256',''),
+            'X-EEye-Archive-Bytes':response.headers.get('X-EEye-Archive-Bytes','')})
     app.view_functions['transfers.transfer_archive']=truncated
     server=make_server('127.0.0.1',0,app,threaded=True)
     worker=threading.Thread(target=server.serve_forever,daemon=True); worker.start()
@@ -267,5 +321,32 @@ def test_incomplete_download_never_acknowledges_and_can_resume(transfer_app):
         assert (root/'captures'/('a'*32)/'0000.jpg').exists()
         with store.get_connection() as db:
             assert db.execute('SELECT count(*) FROM storage_transfers').fetchone()[0]==1
+    finally:
+        server.shutdown(); server.server_close(); worker.join(timeout=2)
+
+
+def test_stale_pending_receiver_retries_fresh_snapshot_without_deleting_saved_zip(transfer_app,monkeypatch):
+    app,root=transfer_app; client_for(app)
+    from werkzeug.serving import make_server
+    from eeye_storage.receiver import receive_session
+    original=app.view_functions['transfers.acknowledge_transfer']
+    def change_before_ack(transfer_id):
+        store.update_session('test-session',site='reference corrected while downloading')
+        return original(transfer_id)
+    app.view_functions['transfers.acknowledge_transfer']=change_before_ack
+    server=make_server('127.0.0.1',0,app,threaded=True)
+    worker=threading.Thread(target=server.serve_forever,daemon=True); worker.start()
+    url='http://127.0.0.1:'+str(server.server_port)
+    try:
+        with pytest.raises(ValueError): receive_session(url,'test-session',root/'laptop','Test laptop',True)
+        old=list((root/'laptop').glob('*.zip'))
+        assert len(old)==1
+        old_bytes=old[0].read_bytes()
+        assert (root/'captures'/('a'*32)/'0000.jpg').exists()
+        app.view_functions['transfers.acknowledge_transfer']=original
+        result=receive_session(url,'test-session',root/'laptop','Test laptop',True)
+        assert result['pi_files_released'] is True
+        assert old[0].read_bytes()==old_bytes
+        assert len(list((root/'laptop').glob('*.zip')))==2
     finally:
         server.shutdown(); server.server_close(); worker.join(timeout=2)

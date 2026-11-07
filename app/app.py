@@ -11,6 +11,7 @@ from app.api import api_bp
 from app.mock.fixtures import seed_fixtures_if_empty
 from app.mock.generator import ensure_sample_media
 from app.receipts import receipts_bp, init_receipts_db
+from app.transfers import transfers_bp, init_transfers_db
 
 # Load i18n dictionaries at startup for server-side rendering
 I18N_DICTS = {}
@@ -47,6 +48,7 @@ def create_app():
     # Register API and Media Blueprint
     app.register_blueprint(api_bp)
     app.register_blueprint(receipts_bp)
+    app.register_blueprint(transfers_bp)
     if not MOCK_MODE:
         from app.capture import CapturePipeline, init_capture_db
         from app.hardware import PiHardware
@@ -55,6 +57,7 @@ def create_app():
         app.extensions['capture_pipeline'] = CapturePipeline(PiHardware(), CAPTURE_FOLDER)
         if store.get_setting('research_mode', None) is None:
             store.set_setting('research_mode', '1')
+    init_transfers_db()
 
     @app.before_request
     def reject_cross_origin_mutations():

@@ -501,11 +501,18 @@ def download_capture(id, job_id):
     import zipfile
     if MOCK_MODE or not store.get_session(id):
         return jsonify(error='Capture not found'), 404
+    for eye in store.get_session(id).get('eyes', {}).values():
+        if eye.get('capture_id') == job_id and eye.get('external_storage'):
+            location = eye['external_storage']
+            return jsonify(error='Capture saved on '+location['device_label']+'. Open that device archive.',
+                           external_storage=location), 410
     with store.get_connection() as db:
         row = db.execute('SELECT state FROM capture_jobs WHERE id=? AND session_id=?', (job_id,id)).fetchone()
     if not row or row['state'] not in ('complete','failed','interrupted'):
         return jsonify(error='Capture is not ready to download'), 409
     directory = current_app.extensions['capture_pipeline'].root / job_id
+    if not directory.is_dir() or directory.is_symlink() or not any(directory.iterdir()):
+        return jsonify(error='Capture files are no longer on the Pi. Open the saved device archive.'), 410
     temporary = tempfile.SpooledTemporaryFile(max_size=16*1024**2)
     with zipfile.ZipFile(temporary,'w',compression=zipfile.ZIP_STORED) as archive:
         for path in directory.iterdir():

@@ -93,6 +93,10 @@ function initializeReceiptForm(form) {
       message('receipt-status', 'No receipt selected. Enter the reference manually or attach a photo.');
       return;
     }
+    if (receipt.external_storage) {
+      message('receipt-status', `Receipt saved on ${receipt.external_storage.device_label}. Open the saved session archive on that device to view the original photo.`);
+      return;
+    }
     try {
       const image = new Image();
       image.src = receipt.image_url;

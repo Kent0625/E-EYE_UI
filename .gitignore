@@ -22,6 +22,8 @@ android/**/build/
 android/local.properties
 *.jks
 *.keystore
+*.egg-info/
+build/
 
 # Pytest / Test artifacts
 .pytest_cache/

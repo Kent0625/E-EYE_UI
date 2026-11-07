@@ -264,7 +264,7 @@ public final class MainActivity extends Activity {
         new Thread(()->{
             try {
                 TransferReceiver receiver=new TransferReceiver(getContentResolver(),cookie);
-                TransferReceiver.Saved checked=receiver.readBack(saved.uri,saved.url,saved.manifestHash);
+                TransferReceiver.Saved checked=receiver.readBack(saved.uri,saved.url,saved.manifestHash,saved.archiveHash,saved.archiveBytes);
                 receiver.acknowledge(checked);
                 receiver.release(checked);
                 onUi(()->{
@@ -286,7 +286,7 @@ public final class MainActivity extends Activity {
         }catch(Exception error){showStatus("The saved-file list could not be read. Use the phone Files app to find your archives.");}
     }
     private void savedFileActions(JSONObject record)throws Exception {
-        Uri uri=Uri.parse(record.getString("uri"));String url=record.getString("url"),hash=record.getString("manifest_sha256");
+        Uri uri=Uri.parse(record.getString("uri"));String url=record.getString("url"),hash=record.getString("manifest_sha256"),archiveHash=record.getString("archive_sha256");long archiveBytes=record.getLong("archive_bytes");
         new AlertDialog.Builder(this).setTitle(record.getString("participant_code"))
             .setItems(new String[]{"Open saved archive","Verify file and retry Pi confirmation"},(dialog,index)->{
                 if(index==0){
@@ -299,7 +299,7 @@ public final class MainActivity extends Activity {
                     new Thread(()->{
                         try{
                             TransferReceiver receiver=new TransferReceiver(getContentResolver(),cookie);
-                            TransferReceiver.Saved saved=receiver.readBack(uri,url,hash);
+                            TransferReceiver.Saved saved=receiver.readBack(uri,url,hash,archiveHash,archiveBytes);
                             receiver.acknowledge(saved);
                             onUi(()->askRelease(saved));
                         }catch(Exception error){onUi(()->showStatus("Saved file could not be verified or confirmed. The app has not requested Pi cleanup."));}

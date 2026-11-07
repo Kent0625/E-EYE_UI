@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import zipfile
 
@@ -53,8 +54,10 @@ def create_archive(destination, fields, files):
     if len(raw) > MAX_MANIFEST_BYTES:
         raise ValueError('The transfer contains too many files for one archive.')
     destination = Path(destination)
+    descriptor=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,'O_BINARY',0),0o600)
+    identity=os.fstat(descriptor)
     try:
-        with destination.open('xb') as handle:
+        with os.fdopen(descriptor,'wb') as handle:
             with zipfile.ZipFile(handle, 'w', compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
                 archive.writestr(MANIFEST_NAME, raw)
                 for entry, expected in zip(files, entries):
@@ -68,16 +71,29 @@ def create_archive(destination, fields, files):
                         if size != expected['bytes'] or digest.hexdigest() != expected['sha256']:
                             raise ValueError('A source changed while the transfer was being prepared. Retry.')
             handle.flush()
+            os.fsync(handle.fileno())
         destination.chmod(0o600)
     except Exception:
-        destination.unlink(missing_ok=True)
+        try:
+            current=destination.stat(follow_symlinks=False)
+            if (current.st_dev,current.st_ino)==(identity.st_dev,identity.st_ino):
+                destination.unlink()
+        except FileNotFoundError:
+            pass
         raise
     return manifest, hashlib.sha256(raw).hexdigest()
 
 
-def verify_archive(source, expected_manifest_sha256, max_total_bytes=16 * 1024**3):
+def verify_archive(source, expected_manifest_sha256, max_total_bytes=16 * 1024**3,
+                   expected_archive_sha256=None, expected_archive_bytes=None):
     """Read every saved byte. Return manifest only after all names, sizes and hashes agree."""
     try:
+        if expected_archive_sha256 is not None or expected_archive_bytes is not None:
+            if isinstance(source,(str,Path)):
+                with Path(source).open('rb') as handle:
+                    _verify_whole_file(handle,expected_archive_sha256,expected_archive_bytes)
+            else:
+                _verify_whole_file(source,expected_archive_sha256,expected_archive_bytes)
         with zipfile.ZipFile(source, 'r') as archive:
             infos = archive.infolist()
             if not infos or infos[0].filename != MANIFEST_NAME or infos[0].file_size > MAX_MANIFEST_BYTES:
@@ -120,3 +136,13 @@ def verify_archive(source, expected_manifest_sha256, max_total_bytes=16 * 1024**
             return manifest
     except (zipfile.BadZipFile, KeyError, TypeError, UnicodeError, json.JSONDecodeError, RuntimeError) as error:
         raise ValueError('The saved transfer archive cannot be verified.') from error
+
+
+def _verify_whole_file(handle, expected_sha256, expected_bytes):
+    handle.seek(0,2)
+    size=handle.tell(); handle.seek(0)
+    if expected_bytes is not None and size!=expected_bytes:
+        raise ValueError('The saved ZIP is incomplete or has extra bytes.')
+    if expected_sha256 is not None and hashlib.file_digest(handle,'sha256').hexdigest()!=expected_sha256:
+        raise ValueError('The complete saved ZIP checksum does not match the Pi.')
+    handle.seek(0)

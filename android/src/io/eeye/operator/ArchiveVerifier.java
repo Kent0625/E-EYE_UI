@@ -15,6 +15,7 @@ import java.util.zip.ZipInputStream;
 public final class ArchiveVerifier {
     public static final String MANIFEST="transfer-manifest.json";
     private static final int MAX_MANIFEST=1024*1024;
+    public interface Source {InputStream open()throws IOException;}
     public static final class Entry {
         public final long bytes;
         public final String sha256;
@@ -48,7 +49,20 @@ public final class ArchiveVerifier {
             return manifestBytes(zip,expected);
         }
     }
-    public static void verify(InputStream input,Map<String,Entry> expected,String manifestHash)throws IOException {
+    public static void verify(Source source,Map<String,Entry> expected,String manifestHash,String archiveHash,long archiveBytes)throws IOException {
+        if(!validHash(archiveHash) || archiveBytes<=0)throw new IOException("Missing archive checksum or byte count");
+        MessageDigest raw=digest();long total=0;byte[] buffer=new byte[65536];int count;
+        try(InputStream input=source.open()) {
+            if(input==null)throw new IOException("The saved archive cannot be reopened");
+            while((count=input.read(buffer))!=-1){total+=count;if(total>archiveBytes)throw new IOException("Archive byte count differs");raw.update(buffer,0,count);}
+        }
+        if(total!=archiveBytes || !hex(raw.digest()).equals(archiveHash))throw new IOException("Stored archive checksum differs");
+        try(InputStream input=source.open()) {
+            if(input==null)throw new IOException("The saved archive cannot be reopened");
+            verifyEntries(input,expected,manifestHash);
+        }
+    }
+    private static void verifyEntries(InputStream input,Map<String,Entry> expected,String manifestHash)throws IOException {
         if(expected.isEmpty() || expected.size()>100000)throw new IOException("Invalid manifest file count");
         for(String path:expected.keySet())if(!safePath(path) || MANIFEST.equals(path))throw new IOException("Invalid manifest path");
         Set<String> seen=new HashSet<>();boolean gotManifest=false;

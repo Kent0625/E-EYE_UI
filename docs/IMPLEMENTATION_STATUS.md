@@ -1,5 +1,15 @@
 # Integration verification status
 
+## Connected-device storage update (local, 2026-11-08)
+
+The v1.2.0 storage update is prepared locally on `codex/device-storage`. It has **not been installed on the Pi**. The latest local targeted suite passed 69 tests, with one Windows symlink-permission skip. Java archive verification passed, including truncated and modified archives. Browser checks passed session export, verified local receiving, explicit source release, and printed-average receipt OCR. The Android APK builds and its signature verifies; physical-phone storage and camera tests remain pending.
+
+The standalone `eeye-storage` library creates and verifies archives and supplies a laptop receiver. Android saves to a user-selected local folder, reopens the saved file, verifies the archive and every entry, then offers explicit removal from the Pi. Browser downloads retain Pi files. Failed or unverified transfers retain originals. Later captures preserve references to earlier saved archives.
+
+The current APK SHA-256 is `eca542bdc164e25302b84fb828e398b549ec8648911aa60b197786c4a251c2fe`. The library wheel SHA-256 is `b28a476a67d0a2bd5378efa080d1900631b6cb88b75712248ef4e4ea3876f3f8`. See `CONNECTED_DEVICE_STORAGE.md` for testing and recovery instructions.
+
+A fresh pre-update app/data/configuration snapshot is verified on Windows at `C:\Users\ASUS\Documents\E-Eye Backups\pre-device-storage-20261108\pre-device-storage-20261108.tar.gz` (6,435,142 bytes), SHA-256 `885f296662bb7e11eb8b34f5dc7a13b5102432bbfb70883a29ac1eec80df3eff`. Deployment includes previous-code fallback and preserved-data snapshots. Earlier isolated Linux activation/rollback checks passed; the expanded four-case fixture and explicit old-data restoration still require Linux/Pi verification. Shell syntax checks pass locally. No new live-device or physical-phone success is claimed below; the remaining paragraphs record the earlier integrated release.
+
 Local verification on 2026-11-08: 44 targeted Python tests passed, including hardware failure/retry lifecycle checks. The browser test passed actual offline OCR for both eyes from an explicitly synthetic receipt, explicit confirmation, original receipt linkage, audit history, reload persistence, capture preservation, desktop/mobile layout, and zero external requests or JavaScript errors. Python compilation and Git whitespace checks passed. The deployed Pi also passed receipt upload/original retrieval, confirmed three-reading mean, session linkage, CSV export, cleanup, and sensor capture-gate tests before and after service restart.
 
 The Android testing APK is in `output/eeye-operator-debug.apk`. Its SHA-256 is `4ad1c2c151a54e73cee2a558123cb4b0964c2819edce65c35bcbc2f5b35d4173`. It was built and its signatures verified; physical phone camera and hotspot operation remain untested. It is not published to Google Play.

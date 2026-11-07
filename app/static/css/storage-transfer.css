@@ -1,0 +1,8 @@
+.storage-transfer { margin-top: 24px; }
+.storage-transfer p { margin: 12px 0; }
+.storage-transfer label { display: block; margin: 20px 0 8px; font-weight: 600; }
+.storage-transfer [hidden] { display: none; }
+.storage-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.storage-transfer [role="status"], #storage-locations { overflow-wrap: anywhere; }
+.storage-transfer [data-error="true"] { color: var(--danger-text); }
+@media print { .storage-transfer { display: none; } }
