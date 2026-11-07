@@ -31,7 +31,7 @@ class PiHardware:
                 import busio
                 import adafruit_vl53l0x
                 from picamera2 import Picamera2
-                from gpiozero import PWMLED
+                from gpiozero import LED, PWMLED
                 pin = os.environ.get('EEYE_LED_PIN')
                 if not pin:
                     raise RuntimeError('LED pin is not configured. Use the verified device wiring.')
@@ -42,7 +42,8 @@ class PiHardware:
                 self.led_duty = float(os.environ['EEYE_LED_DUTY'])
                 if not 0 < self.led_duty <= 1:
                     raise RuntimeError('LED duty must match the verified device setting.')
-                self.led = PWMLED(int(pin), initial_value=0, frequency=800)
+                self.led = (LED(int(pin), initial_value=False) if self.led_duty == 1
+                            else PWMLED(int(pin), initial_value=0, frequency=800))
                 self.sensor = adafruit_vl53l0x.VL53L0X(busio.I2C(board.SCL, board.SDA))
                 self.sensor.measurement_timing_budget = 33000
                 self.camera = Picamera2()

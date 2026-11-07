@@ -25,6 +25,7 @@ def connect(host, password=None):
 
 def run(client, command):
     stdin, stdout, stderr = client.exec_command(command.replace('sudo -n ', "sudo -S -p '' "), timeout=120)
+    stdout.channel.set_combine_stderr(True)
     if 'sudo -n ' in command:
         stdin.write(client._eeye_password + '\n')
         stdin.flush()
@@ -173,6 +174,7 @@ def main():
     p = commands.add_parser('run'); p.add_argument('command')
     p = commands.add_parser('download'); p.add_argument('remote'); p.add_argument('local')
     p = commands.add_parser('upload'); p.add_argument('local'); p.add_argument('remote')
+    p = commands.add_parser('deploy'); p.add_argument('verified_backup')
     args = parser.parse_args()
     client = connect(args.host)
     try:
@@ -191,6 +193,23 @@ def main():
                     client.close()
                     time.sleep(10)
                     client = connect(args.host, password)
+        elif args.action == 'deploy':
+            baseline = json.loads((Path(args.verified_backup)/'project-manifest.json').read_text())
+            archive_path = Path(args.verified_backup)/baseline['file']
+            with archive_path.open('rb') as handle:
+                if hashlib.file_digest(handle,'sha256').hexdigest() != baseline['sha256']:
+                    raise RuntimeError('Baseline backup checksum failed; deployment stopped.')
+            project = Path(__file__).resolve().parent.parent
+            bundle = project/'output'/'eeye-release.tar.gz'
+            with tarfile.open(bundle,'w:gz') as tar:
+                for name in ('app','deploy','requirements.txt'):
+                    tar.add(project/name,arcname=name,filter=lambda info: None if '__pycache__' in info.name or info.name.endswith('.pyc') else info)
+            with client.open_sftp() as sftp:
+                sftp.put(str(bundle),'/tmp/eeye-release.tar.gz')
+            release = '/opt/eeye/releases/' + datetime.now().strftime('%Y%m%d-%H%M%S-integrated')
+            print(run(client, 'sudo -n mkdir -p '+release))
+            print(run(client, 'sudo -n tar -xzf /tmp/eeye-release.tar.gz -C '+release))
+            print(run(client, 'sudo -n bash '+release+'/deploy/install.sh '+release))
         elif args.action == 'run':
             print(run(client, args.command))
         else:

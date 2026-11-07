@@ -11,6 +11,10 @@ if [ ! -f /etc/eeye/device.env ]; then
 fi
 python3 -m venv --system-site-packages "$release/.venv"
 "$release/.venv/bin/pip" install -r "$release/requirements.txt"
+if ! "$release/.venv/bin/python" -c 'import board,busio,adafruit_vl53l0x'; then
+ "$release/.venv/bin/pip" install Adafruit-Blinka adafruit-circuitpython-vl53l0x
+fi
+"$release/.venv/bin/python" -c 'import picamera2,cv2,gpiozero,board,busio,adafruit_vl53l0x'
 if systemctl is-active --quiet eeye.service; then systemctl stop eeye.service; fi
 snapshot="/var/lib/eeye-snapshots/$(date +%Y%m%d-%H%M%S)"
 install -d -m 700 "$snapshot"
