@@ -12,6 +12,11 @@ export function parseReceiptDraft(text) {
     const left = /(?:<\s*L\s*>|\bOS\b|\bLEFT\b)/i.test(line);
     if (right && left) { eye = null; continue; }
     if (right || left) eye = right ? 'OD' : 'OS';
+    else if (/\b(SPH|SPHERE)\b.*\b(CYL|CYLINDER)\b/i.test(line)) {
+      // An unreadable new eye label must not inherit the preceding eye's rows.
+      const label = line.split(/\b(?:SPH|SPHERE)\b/i)[0].trim();
+      if (label) eye = null;
+    }
     if (!eye || ignoreSection) continue;
     const row = line.replace(/<\s*[RL]\s*>|\b(OD|OS|RIGHT|LEFT|AVG|AVE|AVERAGE)\b/gi, '').replace(/^[*#:\s]+/, '').trim();
     const match = row.match(/^([+-]\d{1,2}\.\d{2}|0\.00)\s+([+-]\d{1,2}\.\d{2}|0\.00)(?:\s+(\d{1,3}))?\s*$/);

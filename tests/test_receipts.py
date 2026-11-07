@@ -195,6 +195,11 @@ const three = parseReceiptDraft('OD\n-1.00 -0.25 90\n-1.25 -0.50 90\n-1.25 -0.50
 assert.equal(three.eyes.OD.method, 'three_readings');
 assert.equal(three.eyes.OD.readings.length, 3);
 assert.deepEqual(parseReceiptDraft('OD\nKER\nAVG -1.25 -0.50 90').eyes, {});
+const unclearEye = parseReceiptDraft('OD SPH CYL AX\nAVG -1.25 -0.50 90\n0S SPH CYL AX\nAVG +0.25 -0.25 90');
+assert.equal(unclearEye.eyes.OD.sphere_D, -1.25);
+assert.equal(unclearEye.eyes.OS, undefined);
+const noRightValue = parseReceiptDraft('OD SPH CYL AX\n0S SPH CYL AX\nAVG +0.25 -0.25 90');
+assert.deepEqual(noRightValue.eyes, {});
 '''
     result = subprocess.run([node, '-e', script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
