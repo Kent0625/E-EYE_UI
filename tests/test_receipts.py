@@ -192,8 +192,15 @@ for (const text of ['AVG -1.25 -0.50 90', '<R>\nAVG 1.25 -0.50 90', '<R>\nAVG -1
   assert.deepEqual(parseReceiptDraft(text).eyes, {});
 }
 const three = parseReceiptDraft('OD\n-1.00 -0.25 90\n-1.25 -0.50 90\n-1.25 -0.50 90');
-assert.equal(three.eyes.OD.method, 'three_readings');
-assert.equal(three.eyes.OD.readings.length, 3);
+assert.deepEqual(three.eyes, {});
+const summary = parseReceiptDraft('<R> SPH CYL AX PPS\n- 2.00 -0.50 100\n- 2.75 -0.25 55\n- 2.75 0.00 5.1\n--------\n- 2.50 -0.25 55 5.1\n<R> mm D AX\nR1 7.75 43.50 17\nAVE 7.68 44.00\n<L> SPH CYL AX PPS\n- 0.75 -0.25 109\n- 1.00 -0.25 107\n- 1.00 -0.50 108 5.5\n--------\n- 1.00 -0.25 107 5.5\n<L> mm D AX\nAVE 7.63 44.25');
+assert.equal(summary.eyes.OD.sphere_D, -2.50);
+assert.equal(summary.eyes.OD.cylinder_D, -0.25);
+assert.equal(summary.eyes.OD.axis_deg, 55);
+assert.equal(summary.eyes.OS.sphere_D, -1.00);
+assert.equal(summary.eyes.OS.cylinder_D, -0.25);
+assert.equal(summary.eyes.OS.axis_deg, 107);
+assert.equal(summary.eyes.OD.method, 'printed_average');
 assert.deepEqual(parseReceiptDraft('OD\nKER\nAVG -1.25 -0.50 90').eyes, {});
 const unclearEye = parseReceiptDraft('OD SPH CYL AX\nAVG -1.25 -0.50 90\n0S SPH CYL AX\nAVG +0.25 -0.25 90');
 assert.equal(unclearEye.eyes.OD.sphere_D, -1.25);

@@ -171,11 +171,10 @@
       <div class="receipt-values-panel">
         <label class="gt-label" for="reference-method">Reference source</label>
         <select id="reference-method" class="form-input" aria-describedby="reference-method-hint">
-          <option value="manual">Manual entry</option>
           <option value="printed_average">Printed average on receipt</option>
-          <option value="three_readings">Mean of three readings</option>
+          <option value="manual">Enter printed average manually</option>
         </select>
-        <p class="form-hint" id="reference-method-hint">Choose the method used for this reference. Leave an unavailable eye blank.</p>
+        <p class="form-hint" id="reference-method-hint">Use the final SPH, CYL and AX summary printed for each eye. Do not average the individual readings or use the keratometry AVE section. Leave an unreadable eye blank.</p>
         <div class="receipt-eye-fields">
           {% for key, eye, label in [('od', od, 'Right eye (OD)'), ('os', os_eye, 'Left eye (OS)')] %}
           {% set truth = eye.ground_truth if (eye and eye.ground_truth) else none %}
