@@ -1,5 +1,11 @@
 # Integration verification status
 
+## Settings shutdown control (prepared locally, 2026-11-08)
+
+Added Settings → Device power with native dialog confirmation. Shutdown is disabled in simulation/disconnected mode or when the Pi helper is missing. The confirmed same-origin endpoint rejects capture/archive-preparation overlap, starts only the fixed root-owned shutdown unit and prevents new captures after acceptance. The narrowly scoped polkit rule permits only admin/start/eeye-shutdown.service; the main web service retains NoNewPrivileges. The helper is not enabled at boot. Installation is via the full release installer, not an APK update.
+
+Eight backend/policy tests and the intercepted mobile/desktop dialog workflow pass; 39 capture/storage/permission checks passed with one Windows symlink skip, and 20 Settings/i18n/power/disconnected checks passed. A shutdown-command timeout keeps capture paused and permits an idempotent retry. Safety review reported no concrete defect. No actual machine was shut down. The laptop joined the phone hotspot but cannot reach the confirmed Pi IP 172.24.183.58 on ports 22 or 5000; the owner subsequently confirms the Pi is not connected. Installation and physical operation remain pending. See `SHUTDOWN.md`.
+
 ## Android hotspot connection correction (2026-11-08)
 
 The owner reports `http://172.24.183.58:5000/` opens in the phone browser but fails in the APK. Inspection found unconditional Wi-Fi process binding with no release on network loss. Android 0.3.1/code 4 removes that override and uses system routing. It also removes the unused network-state permissions. Build, APK signature verification, retained-certificate comparison and Java archive verification pass. SHA-256: `36f34ca1e7feae538051409fcd405e6633bc693d7c3884fdb0ea15bbec1230f3`. The prior 0.3.0 installer remains available. No connected Android device was available through adb, and this laptop cannot reach the Pi on the phone hotspot; a successful physical-phone connection is not yet claimed.

@@ -16,4 +16,7 @@ if ! "$release/.venv/bin/python" -c 'import board,busio,adafruit_vl53l0x'; then
 fi
 "$release/.venv/bin/python" -c 'import picamera2,cv2,gpiozero,board,busio,adafruit_vl53l0x'
 "$release/.venv/bin/python" -c 'import sys; sys.path.insert(0,sys.argv[1]); from eeye_storage import verify_archive' "$release"
+install -m 644 -o root -g root "$release/deploy/eeye-shutdown.service" /etc/systemd/system/eeye-shutdown.service
+install -d -m 755 /etc/polkit-1/rules.d
+install -m 644 -o root -g root "$release/deploy/49-eeye-shutdown.rules" /etc/polkit-1/rules.d/49-eeye-shutdown.rules
 bash "$release/deploy/activate.sh" "$release"

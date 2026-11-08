@@ -1,0 +1,9 @@
+[Unit]
+Description=E-Eye operator-requested shutdown
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/sleep 5
+ExecStart=/usr/bin/systemctl --no-block poweroff
+TimeoutStartSec=20

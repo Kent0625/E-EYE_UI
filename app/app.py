@@ -12,6 +12,7 @@ from app.mock.fixtures import seed_fixtures_if_empty
 from app.mock.generator import ensure_sample_media
 from app.receipts import receipts_bp, init_receipts_db
 from app.transfers import transfers_bp, init_transfers_db
+from app.power import power_bp
 
 # Load i18n dictionaries at startup for server-side rendering
 I18N_DICTS = {}
@@ -31,6 +32,7 @@ def translate(key, lang="en", **kwargs):
 def create_app():
     app = Flask(__name__)
     app.config["MOCK_MODE"] = MOCK_MODE
+    app.config['DEVICE_DISCONNECTED'] = DEVICE_DISCONNECTED
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
     
     # Initialize SQLite store
@@ -49,6 +51,7 @@ def create_app():
     app.register_blueprint(api_bp)
     app.register_blueprint(receipts_bp)
     app.register_blueprint(transfers_bp)
+    app.register_blueprint(power_bp)
     if not MOCK_MODE:
         from app.capture import CapturePipeline, init_capture_db
         from app.hardware import PiHardware, DisconnectedHardware

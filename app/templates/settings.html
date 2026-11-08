@@ -145,6 +145,13 @@
     </div>
   </div>
 
+  <section class="card" aria-labelledby="device-power-title">
+    <h3 id="device-power-title" class="card-title settings-section-title" data-i18n="power.title">{{ t('power.title') }}</h3>
+    <p class="about-body-text" data-i18n="power.description">{{ t('power.description') }}</p>
+    <button type="button" id="btn-shutdown" class="btn btn-danger btn-block" disabled aria-describedby="shutdown-hint" data-i18n="power.button">{{ t('power.button') }}</button>
+    <p id="shutdown-hint" class="form-hint" role="status" data-i18n="power.unavailable">{{ t('power.unavailable') }}</p>
+  </section>
+
   <!-- About and Disclaimer Card -->
   <div class="card about-disclaimer-card">
     <h3 class="card-title settings-section-title">
@@ -165,6 +172,15 @@
 </div>
 
 <!-- Modal: Confirm Delete All -->
+<dialog id="shutdown-dialog" class="power-dialog" aria-labelledby="shutdown-title" aria-describedby="shutdown-description">
+  <div class="modal-header"><h3 id="shutdown-title" data-i18n="power.confirmTitle">{{ t('power.confirmTitle') }}</h3></div>
+  <div class="modal-body"><p id="shutdown-description" data-i18n="power.confirmBody">{{ t('power.confirmBody') }}</p></div>
+  <div class="modal-footer">
+    <button type="button" id="btn-cancel-shutdown" class="btn btn-secondary" data-i18n="history.cancel">{{ t('history.cancel') }}</button>
+    <button type="button" id="btn-confirm-shutdown" class="btn btn-danger" data-i18n="power.button">{{ t('power.button') }}</button>
+  </div>
+</dialog>
+
 <div id="delete-all-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="delete-all-title">
   <div class="modal-content">
     <div class="modal-header">
@@ -185,4 +201,5 @@
 
 {% block scripts %}
 <script type="module" src="{{ url_for('static', filename='js/settings.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/power.js') }}"></script>
 {% endblock %}
