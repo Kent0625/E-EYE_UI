@@ -99,4 +99,5 @@ def test_estimated_capture_is_saved_with_provenance_and_no_stability_claim(pipel
     assert eye['distance_estimated'] is True
     manifest = json.loads((pipeline.root/job['id']/'capture.json').read_text())
     assert manifest['distance_estimated'] is True
+    assert manifest['distance_drift'] is None
     assert all(frame['distance_source'] == 'estimated_constant' for frame in manifest['frames'])

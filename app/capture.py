@@ -130,7 +130,7 @@ class CapturePipeline:
             distances = [f['cm'] for f in frames if f['cm'] is not None]
             drift = any(f['cm'] is None or not 10 <= f['cm'] <= 15 for f in frames)
             estimated = any(f.get('distance_estimated', False) for f in frames)
-            manifest = dict(payload, frames=frames, distance_drift=drift,
+            manifest = dict(payload, frames=frames, distance_drift=None if estimated and not drift else drift,
                             distance_estimated=estimated,
                             capture_format='timestamped-jpeg-sequence', version=1)
             (directory / 'capture.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
