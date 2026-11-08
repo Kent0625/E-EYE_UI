@@ -1,6 +1,6 @@
 # E-Eye Photorefractor Operator Web Interface
 
-To test the responsive interface without a Pi, run `scripts/start-ui-preview.ps1` and open `http://127.0.0.1:5080`. This uses a separate, visibly labelled demo database. See [the preview and Android testing guide](docs/RESPONSIVE_UI_GUIDE.md). Real camera capture and deployment still require the Pi.
+To open the operator interface without a Pi, run `scripts/start-ui-preview.ps1` and open `http://127.0.0.1:5080`. It starts with empty history and connection guidance, without sample results or simulated hardware. See [the operator and Android testing guide](docs/RESPONSIVE_UI_GUIDE.md). Real camera capture still requires the Pi. Simulation is opt-in for developer tests only (`EEYE_MOCK=1`).
 
 An offline-first, mobile-responsive operator web interface for the E-Eye portable eccentric photorefractor, designed for rapid community vision screening in rural health units (RHUs) and barangay health stations in the Philippines.
 
@@ -52,7 +52,7 @@ An offline-first, mobile-responsive operator web interface for the E-Eye portabl
 
 ## 1. Windows Setup & Run (Mock Mode)
 
-In Windows development environments, the application runs with simulated Time-of-Flight distance sensor readings and mock camera preview streams (`MOCK_MODE=1` default).
+The application defaults to real device mode. Use `scripts/start-ui-preview.ps1` on Windows for the disconnected operator interface with no sample records. Developer tests explicitly opt into simulation using `EEYE_MOCK=1`.
 
 ### Prerequisites
 - Python 3.11+

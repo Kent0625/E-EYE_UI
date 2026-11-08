@@ -3,8 +3,9 @@ import os
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
-# Running in mock mode allows local UI dev without Pi hardware
-MOCK_MODE = os.environ.get("EEYE_MOCK", "1") == "1"
+# Simulation is opt-in for development tests only.
+MOCK_MODE = os.environ.get("EEYE_MOCK", "0") == "1"
+DEVICE_DISCONNECTED = os.environ.get('EEYE_DEVICE_DISCONNECTED', '0') == '1'
 
 # Database storage path
 DATABASE_PATH = os.environ.get("EEYE_DB", os.path.join(PROJECT_ROOT, "eeye.db"))

@@ -8,6 +8,7 @@ import threading
 from PIL import Image
 from playwright.sync_api import sync_playwright
 from werkzeug.serving import make_server
+os.environ['EEYE_MOCK'] = '1'
 from app import store, config
 from app.app import create_app
 from app.capture import init_capture_db

@@ -12,4 +12,4 @@ $previewHost = if ($LocalOnly) { '127.0.0.1' } else { '0.0.0.0' }
 $arguments = @(('"' + (Join-Path $PSScriptRoot 'run_ui_preview.py') + '"'), '--host', $previewHost, '--port', $Port)
 $process = Start-Process -FilePath $Python -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $previewOutput 'server.log') -RedirectStandardError (Join-Path $previewOutput 'server-errors.log')
 $process.Id | Set-Content -LiteralPath (Join-Path $previewOutput 'server.pid')
-Write-Output "Demo preview: http://127.0.0.1:$Port (process $($process.Id)). Data stays in $previewOutput."
+Write-Output "Operator interface: http://127.0.0.1:$Port (process $($process.Id)). Connect the Pi to record."

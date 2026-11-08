@@ -1,5 +1,13 @@
 # Integration verification status
 
+## Clean operator interface (Windows, 2026-11-08)
+
+At the owner's request, the open laptop/phone interface no longer runs the demo. It uses a separate empty `operator.sqlite3`, no mock participants/results, no simulated capture readiness and no MOCK DATA label. Home contains connection guidance and a collapsible capture-and-save guide. New-session creation and hardware capture remain blocked while disconnected. Hardware status reports not connected instead of pretending the camera, sensor, model or Pi storage are available. The application now defaults to real mode; developer fixtures require explicit `EEYE_MOCK=1` and remain isolated from operator data. Existing Pi records were not accessed or changed.
+
+Live clean-interface checks pass at 320, 390, 768 and 1440 px, including empty history, native disabled Start control, operator guidance, no horizontal overflow and no JavaScript errors. The prior responsive developer checks still pass with explicit isolated fixtures. See `tests/test_disconnected_operator.py` and `scripts/check_operator_ui.py`.
+
+Final full suite after this change: **131 passed, 1 skipped** in 154.56 seconds. The skip remains Windows symlink-creation privilege. Follow-up review found no actionable correctness or data-isolation issue.
+
 ## Responsive interface update (Windows only, 2026-11-08)
 
 The v1.3.0 web interface and Android 0.3.0/code 3 are prepared locally. No Pi connection, deployment or live hardware benchmark was used for this update. The approved references are the existing E-Eye manuscript and UI brief. Recording remains five seconds per eye. Processing elapsed time now comes from job timestamps; the UI does not promise a fixed inference deadline or mark an unavailable model stage complete.

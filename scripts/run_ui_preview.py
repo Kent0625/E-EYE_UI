@@ -1,4 +1,4 @@
-"""Start an explicitly labelled demo using a separate database; no Pi required."""
+"""Open the operator interface with no sample records or connected hardware."""
 import argparse
 import os
 from pathlib import Path
@@ -11,7 +11,8 @@ parser.add_argument('--port', type=int, default=5080)
 args = parser.parse_args()
 data = project/'output'/'ui-preview'
 data.mkdir(parents=True, exist_ok=True)
-os.environ.update(EEYE_MOCK='1', EEYE_DB=str(data/'demo.sqlite3'), EEYE_DATA=str(data/'data'),
+os.environ.update(EEYE_MOCK='0', EEYE_DEVICE_DISCONNECTED='1',
+                  EEYE_DB=str(data/'operator.sqlite3'), EEYE_DATA=str(data/'data'),
                   EEYE_RECEIPTS=str(data/'receipts'))
 sys.path.insert(0, str(project))
 from app.app import create_app
@@ -26,5 +27,5 @@ def preview_apk():
     if not apk.is_file(): abort(404)
     return send_file(apk, as_attachment=True, download_name='eeye-operator-responsive-test.apk')
 
-print(f'DEMO ONLY: http://{args.host}:{args.port} — no Pi hardware or real predictions', flush=True)
+print(f'Operator interface: http://{args.host}:{args.port} — connect the Pi to record.', flush=True)
 app.run(host=args.host, port=args.port, threaded=True, use_reloader=False)

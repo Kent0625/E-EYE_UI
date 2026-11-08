@@ -68,6 +68,9 @@
 
       <!-- Main Content -->
       <main class="page-content" id="main-content">
+        {% if device_disconnected and active_nav != 'home' %}
+        <p class="offline-banner" role="status" data-i18n="connection.body">{{ t('connection.body') }}</p>
+        {% endif %}
         {% block content %}{% endblock %}
       </main>
     </div>

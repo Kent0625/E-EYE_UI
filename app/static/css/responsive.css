@@ -40,6 +40,10 @@ a, button, input, select, textarea { touch-action: manipulation; }
 .processing-links a + a { margin-left: 12px; }
 .receipt-buttons .btn { flex: 1 1 160px; }
 .receipt-confirm-label { min-height: 48px; }
+.operator-connection p { margin-top: 12px; color: var(--text-muted); }
+.operator-connection ol, .operator-guide ol { padding-left: 24px; margin-top: 16px; }
+.operator-connection li, .operator-guide li { padding: 4px 0 8px; }
+.operator-guide summary { min-height: 48px; padding-block: 12px; cursor: pointer; font-weight: 650; }
 .receipt-confirm-label input { margin-top: 4px; }
 #receipt-transcription summary { min-height: 44px; padding-block: 12px; }
 .storage-transfer-section { overflow-wrap: anywhere; }

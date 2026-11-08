@@ -4,7 +4,7 @@ from flask import Flask, render_template, redirect, url_for, request
 from app.config import (
     MOCK_MODE, MEDIA_FOLDER, SOFTWARE_VERSION, DEVICE_NAME,
     DEVICE_SSID, DEVICE_IP, BASE_DIR, get_storage_free_str,
-    TOF_CALIBRATED_DATE, LED_DRIVE_SETTING
+    TOF_CALIBRATED_DATE, LED_DRIVE_SETTING, DEVICE_DISCONNECTED
 )
 from app import store
 from app.api import api_bp
@@ -51,10 +51,11 @@ def create_app():
     app.register_blueprint(transfers_bp)
     if not MOCK_MODE:
         from app.capture import CapturePipeline, init_capture_db
-        from app.hardware import PiHardware
+        from app.hardware import PiHardware, DisconnectedHardware
         from app.config import CAPTURE_FOLDER
         init_capture_db()
-        app.extensions['capture_pipeline'] = CapturePipeline(PiHardware(), CAPTURE_FOLDER)
+        hardware = DisconnectedHardware() if DEVICE_DISCONNECTED else PiHardware()
+        app.extensions['capture_pipeline'] = CapturePipeline(hardware, CAPTURE_FOLDER)
         if store.get_setting('research_mode', None) is None:
             store.set_setting('research_mode', '1')
     init_transfers_db()
@@ -76,6 +77,7 @@ def create_app():
             lang = "en"
         return {
             "mock_mode": MOCK_MODE,
+            "device_disconnected": DEVICE_DISCONNECTED,
             "software_version": SOFTWARE_VERSION,
             "device_name": DEVICE_NAME,
             "storage_free_gb": get_storage_free_str(),
@@ -146,6 +148,10 @@ def create_app():
             "led_drive_setting": LED_DRIVE_SETTING or "Not set",
             "mock_mode": MOCK_MODE
         }
+        if DEVICE_DISCONNECTED:
+            settings_data.update(device_name='Not connected', ssid='Not connected', ip='Not connected',
+                                 storage_free_gb='—', clock_set=False,
+                                 tof_calibrated_date='Not available', led_drive_setting='Not available')
         return render_template("settings.html", active_nav="settings", settings_data=settings_data)
     
     return app

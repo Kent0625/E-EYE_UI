@@ -6,6 +6,7 @@ import tempfile
 import threading
 from playwright.sync_api import sync_playwright
 from werkzeug.serving import make_server
+os.environ['EEYE_MOCK'] = '1'
 from app import store
 from app.app import create_app
 

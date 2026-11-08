@@ -7,6 +7,18 @@ import time
 from collections import deque
 
 
+class DisconnectedHardware:
+    def start(self):
+        raise RuntimeError('Connect this app to the Raspberry Pi address to record an eye.')
+
+    def status(self):
+        return dict(camera='not_connected', tof='not_connected', led='not_connected')
+
+    def reading(self):
+        return dict(cm=None, valid=False, stable=False, estimated=False,
+                    source='unavailable', state='invalid', ts=time.time())
+
+
 class PiHardware:
     def __init__(self):
         self.condition = threading.Condition()

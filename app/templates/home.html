@@ -2,6 +2,17 @@
 
 {% block content %}
 <div class="home-container">
+  {% if device_disconnected %}
+  <section class="card operator-connection">
+    <h2 class="card-title" data-i18n="connection.title">{{ t('connection.title') }}</h2>
+    <p data-i18n="connection.body">{{ t('connection.body') }}</p>
+    <ol>
+      <li data-i18n="connection.step1">{{ t('connection.step1') }}</li>
+      <li data-i18n="connection.step2">{{ t('connection.step2') }}</li>
+      <li data-i18n="connection.step3">{{ t('connection.step3') }}</li>
+    </ol>
+  </section>
+  {% else %}
   <!-- Can't reach device banner (hidden by default, shown if /api/status fails) -->
   <div id="offline-banner" class="offline-banner hidden" role="alert">
     <h3 data-i18n="home.offline.title">
@@ -121,16 +132,30 @@
     </button>
   </div>
 
+  {% endif %}
   <!-- Primary Action: Start Screening -->
   <div class="home-start-wrapper">
+    {% if device_disconnected %}
+    <button type="button" id="btn-start-screening" class="btn btn-primary btn-block btn-start-large" disabled aria-disabled="true" data-i18n="home.start">{{ t('home.start') }}</button>
+    {% else %}
     <a href="/screen/new" id="btn-start-screening" class="btn btn-primary btn-block btn-start-large" data-i18n="home.start">
       <svg class="icon icon-arrow-lg"><use href="#icon-arrow-right"></use></svg>
       <span>Start screening</span>
     </a>
-    <p id="start-disabled-reason" class="action-disabled-reason text-center hidden">
-      Hardware check incomplete or error detected.
+    {% endif %}
+    <p id="start-disabled-reason" class="action-disabled-reason text-center{% if not device_disconnected %} hidden{% endif %}">
+      {% if device_disconnected %}{{ t('connection.body') }}{% else %}Hardware check incomplete or error detected.{% endif %}
     </p>
   </div>
+  <details class="card operator-guide">
+    <summary data-i18n="operator.guide">{{ t('operator.guide') }}</summary>
+    <ol>
+      <li data-i18n="operator.participant">{{ t('operator.participant') }}</li>
+      <li data-i18n="operator.capture">{{ t('operator.capture') }}</li>
+      <li data-i18n="operator.receipt">{{ t('operator.receipt') }}</li>
+      <li data-i18n="operator.save">{{ t('operator.save') }}</li>
+    </ol>
+  </details>
 </div>
 
 <!-- Pre-check Modal Dialog -->
@@ -184,10 +209,19 @@
   const offlineBanner = document.getElementById("offline-banner");
   const btnStart = document.getElementById("btn-start-screening");
   const disabledReason = document.getElementById("start-disabled-reason");
+  btnStart.addEventListener('click', event => {
+    if (btnStart.getAttribute('aria-disabled') === 'true') event.preventDefault();
+  });
 
   async function updateStatus() {
     try {
       const res = await getJson("/api/status");
+      if (res.device_connected === false) {
+        btnStart.classList.add('btn-disabled');
+        btnStart.setAttribute('aria-disabled', 'true');
+        disabledReason.classList.remove('hidden');
+        return;
+      }
       if (offlineBanner) offlineBanner.classList.add("hidden");
       
       // Update badges

@@ -13,7 +13,7 @@ from app.clinical import compute_se
 from app.config import (
     MOCK_MODE, MEDIA_FOLDER, DEVICE_NAME, DEVICE_SSID,
     DEVICE_IP, SOFTWARE_VERSION, get_storage_free_gb,
-    get_storage_free_str, TOF_CALIBRATED_DATE, LED_DRIVE_SETTING
+    get_storage_free_str, TOF_CALIBRATED_DATE, LED_DRIVE_SETTING, DEVICE_DISCONNECTED
 )
 from app.mock.generator import generate_mock_distance_events, generate_mock_mjpeg_stream
 
@@ -44,6 +44,9 @@ def get_status():
     if not MOCK_MODE:
         status_data.update(current_app.extensions['capture_pipeline'].health())
         status_data['clock_set'] = datetime.now().year >= 2026
+    status_data['device_connected'] = not DEVICE_DISCONNECTED
+    if DEVICE_DISCONNECTED:
+        status_data.update(storage_free_gb=None, clock_set=False, model='not_connected')
     return jsonify(status_data)
 
 @api_bp.route("/api/distance", methods=["GET"])
@@ -109,6 +112,8 @@ def run_precheck():
 
 @api_bp.route("/api/sessions", methods=["POST"])
 def create_session():
+    if DEVICE_DISCONNECTED:
+        return jsonify(error='Connect to the Raspberry Pi address before starting a session.'), 409
     data = request.get_json() or {}
     now = datetime.now().strftime("%y%m%d")
     
