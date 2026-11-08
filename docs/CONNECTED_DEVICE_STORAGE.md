@@ -4,6 +4,8 @@ This update keeps a temporary Pi copy until a receiving app has checked its save
 
 ## Operator workflow
 
+When the owner-enabled ToF fallback is active, the screen shows **12.50 cm — estimated, ToF unavailable**. Use a ruler or fixed guide to position the eye manually. The number is a constant, not a measurement; movement cannot be checked during estimated frames. Recordings and result pages retain this distinction. A valid real sensor reading takes priority, and real out-of-range readings still block recording. Camera or LED failures still prevent capture. Disable `EEYE_ALLOW_ESTIMATED_DISTANCE` to restore the strict sensor requirement.
+
 1. Finish the eye capture and confirm the printed autorefractor average in the participant's result.
 2. Under **Save session to a phone or computer**, give the destination a useful name, such as Research phone.
 3. Choose **Prepare session archive**, then **Save to this device**. Select local storage with enough space.

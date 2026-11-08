@@ -41,7 +41,8 @@ class CapturePipeline:
             frame_attempted = True
             self.hardware.frame(timeout=3)
             reading = self.hardware.reading()
-            return dict(camera='ok', tof='ok' if reading['valid'] else 'error', led='ok',
+            return dict(camera='ok', tof='estimated' if reading.get('estimated') else 'ok' if reading['valid'] else 'error', led='ok',
+                        distance_estimated=reading.get('estimated', False),
                         model='missing', capture_available=reading['valid'],
                         model_message='Refraction model is not installed. Receipt collection is available.',
                         capture_busy=self.lock.locked())
@@ -65,7 +66,8 @@ class CapturePipeline:
             if not session['consent_age'] or not session['consent_signed']:
                 raise ValueError('Record consent before capture.')
             self.hardware.start()
-            if not self.hardware.reading()['stable']:
+            reading = self.hardware.reading()
+            if not (reading['stable'] or (reading.get('estimated') and reading.get('valid'))):
                 raise ValueError('Hold a valid 10 to 15 cm distance for one second.')
             self.root.mkdir(parents=True, exist_ok=True)
             if shutil.disk_usage(self.root).free < 250 * 1024**2:
@@ -127,12 +129,15 @@ class CapturePipeline:
             self._save(payload, 'processing')
             distances = [f['cm'] for f in frames if f['cm'] is not None]
             drift = any(f['cm'] is None or not 10 <= f['cm'] <= 15 for f in frames)
+            estimated = any(f.get('distance_estimated', False) for f in frames)
             manifest = dict(payload, frames=frames, distance_drift=drift,
+                            distance_estimated=estimated,
                             capture_format='timestamped-jpeg-sequence', version=1)
             (directory / 'capture.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
             result = dict(status='retake_needed' if drift else 'captured',
                 capture_id=payload['id'], frames_total=len(frames), frames_used=0,
                 distance_cm={'min': min(distances), 'max': max(distances)} if distances else None,
+                distance_estimated=estimated,
                 error_reason='Distance changed during capture. Retake this eye.' if drift else None,
                 prediction_status='unavailable',
                 message='Capture saved. Refraction prediction is unavailable until the trained model is installed.')
@@ -166,14 +171,17 @@ class CapturePipeline:
             self.hardware.start()
             self.hardware.illuminate(6)
             end, after, readings, frame = time.monotonic()+5, 0, [], None
+            estimated = False
             while time.monotonic() < end:
                 frame = self.hardware.frame(after=after)
                 after = frame['sequence']
                 readings.append(frame['cm'])
+                estimated = estimated or frame.get('distance_estimated', False)
             self.root.mkdir(parents=True, exist_ok=True)
             (self.root / 'precheck.jpg').write_bytes(frame['jpeg'])
             return dict(crescent_frame_url='/api/device/precheck.jpg',
-                        tof_ok=bool(readings) and all(cm is not None and 10 <= cm <= 15 for cm in readings),
+                        distance_estimated=estimated,
+                        tof_ok=not estimated and bool(readings) and all(cm is not None and 10 <= cm <= 15 for cm in readings),
                         brightness_ok=False, brightness_mean=None,
                         brightness_message='Confirm pupil visibility and calibrated brightness before participant capture.')
         finally:

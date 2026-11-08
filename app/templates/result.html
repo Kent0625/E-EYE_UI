@@ -35,6 +35,9 @@
     {% endif %}
   </div>
 
+  {% if eye_data and eye_data.distance_estimated %}
+    <p class="form-hint">Distance includes a 12.50 cm estimate because ToF was unavailable. Actual distance and movement were not measured during those frames.</p>
+  {% endif %}
   {% if eye_data and eye_data.status == 'ok' %}
     <div class="eye-card-body">
       {% if eye_data.thumbnail_url or mock_mode %}

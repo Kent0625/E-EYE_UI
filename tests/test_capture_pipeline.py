@@ -81,3 +81,22 @@ def test_restart_marks_incomplete_jobs_interrupted(pipeline):
         db.execute("INSERT INTO capture_jobs(id,session_id,eye,state,payload) VALUES ('old','case','OD','recording','{}')")
     init_capture_db()
     assert latest_job('case','OD')['state']=='interrupted'
+
+
+def test_estimated_capture_is_saved_with_provenance_and_no_stability_claim(pipeline):
+    pipeline.hardware.reading = lambda: dict(stable=False, valid=True, cm=12.5, estimated=True)
+    original_frame = pipeline.hardware.frame
+    def estimated_frame(**kwargs):
+        return dict(original_frame(**kwargs), cm=12.5, distance_estimated=True,
+                    distance_source='estimated_constant')
+    pipeline.hardware.frame = estimated_frame
+    health = pipeline.health()
+    assert health['tof'] == 'estimated'
+    assert health['capture_available'] is True
+    job = pipeline.start('case', 'OD')
+    assert wait_complete(pipeline)['success'] is True
+    eye = store.get_session('case')['eyes']['OD']
+    assert eye['distance_estimated'] is True
+    manifest = json.loads((pipeline.root/job['id']/'capture.json').read_text())
+    assert manifest['distance_estimated'] is True
+    assert all(frame['distance_source'] == 'estimated_constant' for frame in manifest['frames'])

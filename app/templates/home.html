@@ -192,7 +192,7 @@
       
       // Update badges
       setBadge("status-camera", res.camera === "ok", res.camera === "not_checked" ? 'Not checked' : res.camera === "ok" ? t("home.status.ok") : t("home.status.error"), res.camera === 'not_checked');
-      setBadge("status-tof", res.tof === "ok", res.tof === "ok" ? t("home.status.ok") : t("home.status.error"));
+      setBadge("status-tof", res.tof === "ok", res.tof === "estimated" ? "12.50 cm estimated — ToF unavailable" : res.tof === "ok" ? t("home.status.ok") : t("home.status.error"), res.tof === 'estimated');
       setBadge("status-led", res.led === "ok", res.led === "stopped" ? 'Off' : res.led === "ok" ? t("home.status.ok") : t("home.status.error"), res.led === 'stopped');
       setBadge("status-model", res.model === "loaded", res.model === "loaded" ? t("home.status.loaded") : "Prediction unavailable", res.model !== "loaded");
       
@@ -247,7 +247,7 @@
     try {
       const res = await postJson("/api/precheck");
       if (precheckImg) precheckImg.src = res.crescent_frame_url;
-      setBadge('precheck-tof-badge', res.tof_ok, res.tof_ok ? 'Pass' : 'Check distance sensor', !res.tof_ok);
+      setBadge('precheck-tof-badge', res.tof_ok, res.distance_estimated ? 'Estimated only — position manually at 12.50 cm' : res.tof_ok ? 'Pass' : 'Check distance sensor', !res.tof_ok);
       setBadge('precheck-brightness-badge', res.brightness_ok,
         res.brightness_mean === null ? 'Not verified' : `${res.brightness_ok ? 'Pass' : 'Out of range'} (${res.brightness_mean})`, !res.brightness_ok);
       if (precheckLoading) precheckLoading.classList.add("hidden");

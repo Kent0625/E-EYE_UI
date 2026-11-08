@@ -13,6 +13,8 @@ class PiHardware:
         self.latest = None
         self.distance = None
         self.distance_time = 0
+        self.distance_estimated = False
+        self.allow_estimate = os.environ.get('EEYE_ALLOW_ESTIMATED_DISTANCE', '0') == '1'
         self.distance_history = deque(maxlen=100)
         self.stable_since = None
         self.sequence = 0
@@ -56,13 +58,13 @@ class PiHardware:
                 self.offset_mm = float(offset)
                 if not math.isfinite(self.offset_mm):
                     raise RuntimeError('Sensor-to-camera offset must be a finite measurement.')
-                import board
-                import busio
-                import adafruit_vl53l0x
-                self.i2c = busio.I2C(board.SCL, board.SDA)
-                self.sensor = adafruit_vl53l0x.VL53L0X(self.i2c)
-                self.sensor.measurement_timing_budget = 33000
-                self._status['tof'] = 'starting'
+                try:
+                    self._open_sensor()
+                    self._status['tof'] = 'starting'
+                except Exception:
+                    if not self.allow_estimate:
+                        raise
+                    self._status['tof'] = 'estimated'
                 component = 'camera'
                 from picamera2 import Picamera2
                 self.camera = Picamera2()
@@ -95,23 +97,45 @@ class PiHardware:
                 self.close()
                 raise RuntimeError(self.error) from exc
 
+    def _open_sensor(self):
+        import board
+        import busio
+        import adafruit_vl53l0x
+        bus = busio.I2C(board.SCL, board.SDA)
+        try:
+            sensor = adafruit_vl53l0x.VL53L0X(bus)
+            sensor.measurement_timing_budget = 33000
+        except Exception:
+            bus.deinit()
+            raise
+        self.i2c, self.sensor = bus, sensor
+
     def _sensor_loop(self, stop, sensor):
+        retry_at = time.monotonic() + 5
         while not stop.is_set():
             now = time.monotonic()
             try:
+                if sensor is None and now >= retry_at:
+                    retry_at = now + 5
+                    self._open_sensor()
+                    sensor = self.sensor
                 raw = float(sensor.range)
                 cm = (raw + self.offset_mm) / 10 if 0 < raw < 2000 else None
             except Exception:
                 cm = None
+            estimated = cm is None and self.allow_estimate
+            if estimated:
+                cm = 12.5
             with self.condition:
                 if stop.is_set():
                     return
-                self._status['tof'] = 'ok' if cm is not None else 'error'
+                self._status['tof'] = 'estimated' if estimated else 'ok' if cm is not None else 'error'
                 if now - self.distance_time >= 0.5:
                     self.stable_since = None
                 self.distance, self.distance_time = cm, now
-                self.distance_history.append((now, cm))
-                if cm is not None and 10 <= cm <= 15:
+                self.distance_estimated = estimated
+                self.distance_history.append((now, cm, estimated))
+                if not estimated and cm is not None and 10 <= cm <= 15:
                     self.stable_since = self.stable_since or now
                 else:
                     self.stable_since = None
@@ -138,9 +162,9 @@ class PiHardware:
                     acquired = sensor_ns / 1e9 + time.monotonic() - time.clock_gettime(time.CLOCK_BOOTTIME)
                 with self.condition:
                     samples = [sample for sample in self.distance_history if sample[0] <= acquired]
-                    sensor_time, cm = samples[-1] if samples else (0, None)
+                    sensor_time, cm, estimated = samples[-1] if samples else (0, None, False)
                     if acquired-sensor_time > .5:
-                        cm = None
+                        cm, estimated = None, False
                 ok, jpg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
                 if not ok:
                     raise RuntimeError('Could not encode the camera frame.')
@@ -152,6 +176,8 @@ class PiHardware:
                     self.latest = dict(sequence=self.sequence, jpeg=jpg.tobytes(),
                         monotonic=acquired, timestamp=time.time()-(now-acquired), cm=cm,
                         sensor_timestamp=sensor_time, illuminated=illuminated,
+                        distance_estimated=estimated,
+                        distance_source='estimated_constant' if estimated else 'tof' if cm is not None else 'unavailable',
                         camera_metadata={k: metadata.get(k) for k in
                             ('SensorTimestamp', 'ExposureTime', 'AnalogueGain', 'LensPosition')})
                     self._status['camera'] = 'ok'
@@ -182,6 +208,8 @@ class PiHardware:
             cm = self.distance if fresh else None
             valid = cm is not None
             return dict(cm=round(cm, 2) if valid else None, valid=valid,
+                        estimated=bool(valid and self.distance_estimated),
+                        source='estimated_constant' if valid and self.distance_estimated else 'tof' if valid else 'unavailable',
                         state='invalid' if not valid else ('too_close' if cm < 10 else 'too_far' if cm > 15 else 'ok'),
                         stable=bool(fresh and self.stable_since and now-self.stable_since >= 1),
                         ts=time.time())
@@ -205,6 +233,7 @@ class PiHardware:
     def _clear_samples(self):
         self.latest = self.distance = self.stable_since = None
         self.distance_time = 0
+        self.distance_estimated = False
         self.distance_history.clear()
         self.condition.notify_all()
 

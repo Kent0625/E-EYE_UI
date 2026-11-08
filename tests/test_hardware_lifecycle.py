@@ -230,3 +230,63 @@ def test_valid_camera_does_not_mask_disconnected_distance_sensor(tmp_path):
     assert health['camera'] == 'ok'
     assert health['tof'] == 'error'
     assert health['capture_available'] is False
+
+
+def test_enabled_estimate_allows_missing_sensor_without_claiming_measurement(drivers, monkeypatch):
+    monkeypatch.setenv('EEYE_ALLOW_ESTIMATED_DISTANCE', '1')
+    drivers.sensor_failures = 100
+    hardware = PiHardware()
+    monkeypatch.setattr(hardware, '_camera_loop', lambda *args: None)
+    try:
+        hardware.start()
+        deadline = time.monotonic() + 1
+        while hardware.reading()['cm'] is None and time.monotonic() < deadline:
+            time.sleep(.01)
+        reading = hardware.reading()
+        assert reading['cm'] == 12.5
+        assert reading['estimated'] is True
+        assert reading['stable'] is False
+        assert hardware.status()['tof'] == 'estimated'
+        assert drivers.cameras
+    finally:
+        hardware.close()
+    assert hardware.reading()['cm'] is None
+
+
+def test_estimate_never_overrides_valid_out_of_range_sensor(drivers, monkeypatch):
+    monkeypatch.setenv('EEYE_ALLOW_ESTIMATED_DISTANCE', '1')
+    values = [None]
+    def distance(self):
+        if values[0] is None:
+            raise OSError('disconnected')
+        return values[0]
+    monkeypatch.setattr(sys.modules['adafruit_vl53l0x'].VL53L0X, 'range', property(distance))
+    hardware = PiHardware()
+    monkeypatch.setattr(hardware, '_camera_loop', lambda *args: None)
+    try:
+        hardware.start()
+        time.sleep(.15)
+        assert hardware.reading()['estimated'] is True
+        values[0] = 200
+        time.sleep(.15)
+        reading = hardware.reading()
+        assert reading['cm'] == 20
+        assert reading['estimated'] is False
+        assert reading['state'] == 'too_far'
+        assert reading['stable'] is False
+    finally:
+        hardware.close()
+
+
+def test_estimated_distance_cannot_hide_camera_failure(drivers, monkeypatch, tmp_path):
+    monkeypatch.setenv('EEYE_ALLOW_ESTIMATED_DISTANCE', '1')
+    drivers.sensor_failures = 1
+    drivers.camera_start_error = True
+    hardware = PiHardware()
+    try:
+        health = CapturePipeline(hardware, tmp_path).health()
+        assert health['capture_available'] is False
+        assert health['camera'] == 'error'
+        assert hardware.reading()['valid'] is False
+    finally:
+        hardware.close()

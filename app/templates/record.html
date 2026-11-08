@@ -162,6 +162,17 @@
   }
 
   function renderDistance(data) {
+    if (data.valid && data.estimated) {
+      distVal.textContent = Number(data.cm).toFixed(2);
+      distBadge.className = "badge badge-warn";
+      distBadge.textContent = "Estimated — ToF unavailable";
+      gaugePointer.style.left = "50%";
+      inRangeStartTime = null;
+      btnRecord.disabled = false;
+      recordReason.textContent = "Estimated distance. Position the eye manually at 12.50 cm.";
+      stabilityText.textContent = "Actual distance and movement are not measured.";
+      return;
+    }
     if (!data.valid || data.cm <= 0) {
       distVal.textContent = "--";
       distBadge.className = "badge badge-warn";
