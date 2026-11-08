@@ -16,4 +16,4 @@ The API requires a same-origin, explicitly confirmed POST, checks capability and
 
 Backend tests cover confirmation, origin, busy-device rejection, idempotence, fixed command, failure handling and disconnected/simulation rejection. The policy test evaluates allowed/denied user, unit, verb and action combinations. The browser test intercepts all shutdown responses and checks phone/laptop confirmation, keyboard focus, Cancel/Escape, one confirmed request and busy-error recovery. No real shutdown is executed by these tests.
 
-Physical installation and a deliberate shutdown test need a reachable Pi. The current laptop cannot reach the Pi at 172.24.183.58 through the phone hotspot; switching back to LaptopHotspot is pending.
+Installed on the Pi at `172.24.183.58` in release `20261108-142150-ui-shutdown`. Root unit validation, admin action authorization, API availability and the real Settings confirmation/Cancel path passed. No actual poweroff was requested. A fresh verified Windows backup and previous-code activation snapshot are retained; see `IMPLEMENTATION_STATUS.md`.

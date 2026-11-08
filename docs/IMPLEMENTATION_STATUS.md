@@ -1,5 +1,13 @@
 # Integration verification status
 
+## Shutdown update installed on Pi (2026-11-08)
+
+Installed `/opt/eeye/releases/20261108-142150-ui-shutdown` at `172.24.183.58`. The service is active in real mode and reports v1.3.0. The Pi SSH key matched the previously trusted identity. Fresh stopped-service Windows backup: `C:\Users\ASUS\Documents\E-Eye Backups\before-shutdown-update-20261108-142150\app-data-config.tar.gz`, 66,297,396 bytes, 1,007 members, SHA-256 `e2de8e5f444069b5b549bcf5402691f47210d3836501c3b24405b847611e41be`; remote hash matched and all archive files were read. Activation snapshot: `/var/lib/eeye-snapshots/20261108-142310-zJDqTh`. The prior release remains available.
+
+All four isolated Linux rollback cases and driver imports passed. Root unit syntax verification passed. A root-trusted polkit check for a separate admin process verified the exact shutdown action permission; no unit start was requested. Deployed power/backend/template hashes match Windows source. `/api/device/power` reports available=true, pending=false, uncertain=false. A real unconfirmed POST returned 400. The real Settings confirmation opened on a phone-sized browser and canceled without any shutdown POST. The shutdown unit remains inactive/dead. An actual poweroff remains for the operator to initiate deliberately.
+
+The corrected Android 0.3.1 APK is also served from `/static/downloads/eeye-operator-hotspot-fix-0.3.1.apk` on this Pi; its download checksum matches the signed Windows installer. Server logs now show requests from the owner's Android WebView. During verification the phone issued successful session Delete requests; these explain the difference between the pre-update backup and current History. Those prior records remain in the Windows backup; no automatic restoration was performed.
+
 ## Settings shutdown control (prepared locally, 2026-11-08)
 
 Added Settings → Device power with native dialog confirmation. Shutdown is disabled in simulation/disconnected mode or when the Pi helper is missing. The confirmed same-origin endpoint rejects capture/archive-preparation overlap, starts only the fixed root-owned shutdown unit and prevents new captures after acceptance. The narrowly scoped polkit rule permits only admin/start/eeye-shutdown.service; the main web service retains NoNewPrivileges. The helper is not enabled at boot. Installation is via the full release installer, not an APK update.
