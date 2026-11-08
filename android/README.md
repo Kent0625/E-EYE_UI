@@ -1,6 +1,8 @@
 # E-Eye Android operator shell
 
-Local testing APK only. The app connects to the Pi interface over the same Wi-Fi hotspot, supports receipt camera/photo selection and saves CSV/capture downloads through Android's file picker. It binds its own network requests to Wi-Fi so a hotspot without internet remains usable. All WebView requests are restricted to the exact configured local Pi origin. There is no JavaScript bridge, external asset service, telemetry, or clinical calculation in this app.
+Local testing APK only. The app connects to the Pi interface over the local network, supports receipt camera/photo selection and saves CSV/capture downloads through Android's file picker. Version 0.3.1 uses Android's normal network routing; it does not bind the process to a Wi-Fi network, which can disconnect or differ from the phone's own hotspot route. All WebView requests remain restricted to the exact configured local Pi origin. There is no JavaScript bridge, external asset service, telemetry, or clinical calculation in this app.
+
+For the owner-reported browser-works/APK-fails hotspot case, install 0.3.1/code 4 over 0.3.0, then enter the exact address that opens in the phone browser. The reported working address was `http://172.24.183.58:5000/`. Do not substitute the laptop preview port 5080. The APK builds, archive verification tests pass and its signing certificate matches the previous testing app. Physical hotspot retesting remains required; removing the forced binding addresses a concrete routing risk but is not proof that this phone's failure is resolved.
 
 ## Save a session on this device
 

@@ -5,10 +5,6 @@ import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.Color;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
-import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -45,8 +41,6 @@ public final class MainActivity extends Activity {
     private Uri origin, cameraUri;
     private ValueCallback<Uri[]> fileCallback;
     private String downloadUrl;
-    private ConnectivityManager connectivity;
-    private ConnectivityManager.NetworkCallback networkCallback;
     private boolean loadFailed;
 
     @Override public void onCreate(Bundle state) {
@@ -92,20 +86,6 @@ public final class MainActivity extends Activity {
         root.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
         configureWeb();
-        connectivity = (ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
-        networkCallback = new ConnectivityManager.NetworkCallback() {
-            @Override public void onAvailable(Network network) {
-                connectivity.bindProcessToNetwork(network);
-            }
-            @Override public void onLost(Network network) {
-                runOnUiThread(() -> showStatus("Wi-Fi disconnected. Rejoin the hotspot and reload."));
-            }
-        };
-        connectivity.registerNetworkCallback(new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), networkCallback);
-        for (Network network : connectivity.getAllNetworks()) {
-            NetworkCapabilities caps = connectivity.getNetworkCapabilities(network);
-            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) connectivity.bindProcessToNetwork(network);
-        }
         connect();
     }
 
@@ -331,7 +311,6 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() { if(web.canGoBack()) web.goBack(); else super.onBackPressed(); }
     @Override protected void onDestroy() {
         if(fileCallback!=null) fileCallback.onReceiveValue(null);
-        if(connectivity!=null && networkCallback!=null) connectivity.unregisterNetworkCallback(networkCallback);
         if(web!=null) web.destroy();
         super.onDestroy();
     }

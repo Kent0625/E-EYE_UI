@@ -1,5 +1,9 @@
 # Integration verification status
 
+## Android hotspot connection correction (2026-11-08)
+
+The owner reports `http://172.24.183.58:5000/` opens in the phone browser but fails in the APK. Inspection found unconditional Wi-Fi process binding with no release on network loss. Android 0.3.1/code 4 removes that override and uses system routing. It also removes the unused network-state permissions. Build, APK signature verification, retained-certificate comparison and Java archive verification pass. SHA-256: `36f34ca1e7feae538051409fcd405e6633bc693d7c3884fdb0ea15bbec1230f3`. The prior 0.3.0 installer remains available. No connected Android device was available through adb, and this laptop cannot reach the Pi on the phone hotspot; a successful physical-phone connection is not yet claimed.
+
 ## Clean operator interface (Windows, 2026-11-08)
 
 At the owner's request, the open laptop/phone interface no longer runs the demo. It uses a separate empty `operator.sqlite3`, no mock participants/results, no simulated capture readiness and no MOCK DATA label. Home contains connection guidance and a collapsible capture-and-save guide. New-session creation and hardware capture remain blocked while disconnected. Hardware status reports not connected instead of pretending the camera, sensor, model or Pi storage are available. The application now defaults to real mode; developer fixtures require explicit `EEYE_MOCK=1` and remain isolated from operator data. Existing Pi records were not accessed or changed.
