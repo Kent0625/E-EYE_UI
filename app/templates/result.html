@@ -328,7 +328,7 @@
     </aside>
 
     <!-- Main Results Column (Eye cards: first content on left on Desktop >= 1024px) -->
-    <main class="result-main">
+    <div class="result-main">
       <div class="eye-cards-container" id="eye-cards-container">
         {{ render_eye_card('OD', od, s.id if s else '') }}
         {{ render_eye_card('OS', os_eye, s.id if s else '') }}
@@ -356,7 +356,7 @@
       <div class="result-mobile-bottom-panel">
         {{ render_meta_and_actions(s, od, os_eye) }}
       </div>
-    </main>
+    </div>
   </div>
 </div>
 {% endblock %}

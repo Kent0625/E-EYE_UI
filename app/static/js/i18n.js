@@ -38,6 +38,7 @@ export async function setLanguage(lang) {
     });
     
     applyTranslations();
+    document.dispatchEvent(new CustomEvent('eeye:languagechange'));
   } catch (err) {
     console.error("i18n initialization error:", err);
   }

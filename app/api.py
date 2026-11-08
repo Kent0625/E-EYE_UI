@@ -227,31 +227,30 @@ def stream_processing_events(id):
     if not store.get_session(id):
         return jsonify(error='Session not found'), 404
     if not MOCK_MODE:
-        from app.capture import latest_job
+        from app.capture import latest_job, processing_event
         eye = request.args.get('eye','OD')
         def observe_processing():
             while True:
                 job = latest_job(id,eye)
-                done = not job or job['state'] in ('complete','failed','interrupted')
-                result = (job or {}).get('result', {})
-                payload = dict(step='done' if done else 'extracting', done=done,
-                    status=result.get('status','retake_needed'),
-                    label=result.get('message') or (job or {}).get('message','Capture is being saved.'))
+                payload = processing_event(job)
                 yield f'data: {json.dumps(payload)}\n\n'
-                if done: return
+                if payload['done']: return
                 time.sleep(.3)
         return Response(observe_processing(), mimetype='text/event-stream', headers={'Cache-Control':'no-store'})
+    mock_eye = request.args.get('eye', 'OD')
     def event_generator():
-        steps = [
-            ("extracting", "Extracting frames..."),
-            ("quality_check", "Checking frame quality..."),
-            ("feature_calc", "Computing pupil crescent features..."),
-            ("inference", "Estimating refraction..."),
-            ("done", "Complete")
-        ]
-        for step_code, label in steps:
+        started = time.monotonic()
+        for index, label in enumerate(('Demo: saving recording.', 'Demo: checking frame quality.', 'Demo: preparing result.')):
             time.sleep(0.7)
-            payload = json.dumps({"step": step_code, "label": label, "done": step_code == "done"})
+            done = index == 2
+            retake = id == 's_mock_retake' and mock_eye == 'OS'
+            payload = json.dumps(dict(label='Not enough clear frames. Retake this eye.' if done and retake else label,
+                reason='few_valid_frames' if done and retake else None,
+                done=done, status='retake_needed' if retake else 'captured',
+                processing_elapsed_s=round(time.monotonic()-started, 2),
+                phases=dict(saving='complete' if index else 'running',
+                            quality='failed' if done and retake else 'complete' if done else 'running' if index else 'waiting',
+                            prediction='complete' if done else 'waiting')))
             yield f"data: {payload}\n\n"
     
     return Response(

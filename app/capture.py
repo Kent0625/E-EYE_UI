@@ -27,6 +27,29 @@ def latest_job(session_id, eye):
     return dict(json.loads(row['payload']), id=row['id'], state=row['state'])
 
 
+def processing_event(job, now=None):
+    if not job:
+        return dict(done=True, status='retake_needed', label='Capture job not found. Open the saved record or retake this eye.',
+                    processing_elapsed_s=None, frames_captured=0,
+                    phases=dict(saving='failed', quality='waiting', prediction='unavailable'))
+    state = job['state']
+    done = state in ('complete', 'failed', 'interrupted')
+    result = job.get('result', {})
+    started = job.get('processing_started_at')
+    end = job.get('completed_at') if done else time.time() if now is None else now
+    elapsed = round(max(0, end-started), 2) if started is not None and end is not None else None
+    quality = result.get('quality_status')
+    phases = dict(saving='failed' if state in ('failed','interrupted') else 'running' if state == 'recording' else 'complete',
+                  quality='complete' if quality == 'passed' else 'failed' if quality == 'failed' else
+                          'unavailable' if quality == 'unavailable' or done else 'running' if state == 'processing' else 'waiting',
+                  prediction='unavailable')
+    return dict(done=done, status=result.get('status', 'retake_needed' if done else 'recording'),
+                reason=result.get('error_reason'),
+                label=result.get('message') or job.get('message') or
+                      ('Capture interrupted. Open the saved record or retake this eye.' if state == 'interrupted' else 'Saving the eye recording.'),
+                processing_elapsed_s=elapsed, frames_captured=job.get('frames_captured', 0), phases=phases)
+
+
 class CapturePipeline:
     def __init__(self, hardware, root, duration=5):
         self.hardware = hardware
@@ -126,6 +149,7 @@ class CapturePipeline:
                 self._save(payload, 'recording')
             if not frames:
                 raise RuntimeError('The camera returned no frames during capture.')
+            payload['processing_started_at'] = time.time()
             self._save(payload, 'processing')
             distances = [f['cm'] for f in frames if f['cm'] is not None]
             drift = any(f['cm'] is None or not 10 <= f['cm'] <= 15 for f in frames)

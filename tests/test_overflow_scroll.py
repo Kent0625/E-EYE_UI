@@ -81,11 +81,11 @@ def test_no_horizontal_overflow_scroll():
     finally:
         server.shutdown()
 
-def test_phone_320x568_align_and_record_no_scroll_visibility():
+def test_phone_320x568_capture_controls_remain_reachable():
     """
     At 320x568 on Align & Record:
-    Preview, large distance number/state, and Record button must ALL be visible
-    with no scrolling (window.scrollY == 0).
+    Preview and distance are readable. Vertical scrolling reaches the Record
+    button and its explanation without overlap from the mobile navigation.
     """
     app = create_app()
     port = find_free_port()
@@ -128,7 +128,9 @@ def test_phone_320x568_align_and_record_no_scroll_visibility():
                 f"Distance badge out of viewport: y={dist_badge_box['y']}, h={dist_badge_box['height']}"
             )
 
-            # 3. Record button in sticky action bar is visible within viewport
+            # Short phones scroll to the action instead of shrinking safety text.
+            page.locator('#btn-record').scroll_into_view_if_needed()
+            assert page.locator('#record-disabled-reason').is_visible()
             btn_box = page.locator("#btn-record").bounding_box()
             assert btn_box is not None, "Record button not rendered"
             assert btn_box["y"] >= 0 and (btn_box["y"] + btn_box["height"]) <= viewport_height, (
@@ -138,6 +140,11 @@ def test_phone_320x568_align_and_record_no_scroll_visibility():
             # Touch target of button >= 48x48
             assert btn_box["height"] >= 48, f"Button height {btn_box['height']} < 48px"
             assert btn_box["width"] >= 48, f"Button width {btn_box['width']} < 48px"
+            assert page.locator('#btn-record').evaluate('''el => {
+                const r=el.getBoundingClientRect();
+                const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+                return hit===el || el.contains(hit);
+            }'''), 'Record button is covered by another element'
 
             browser.close()
     finally:
@@ -145,5 +152,5 @@ def test_phone_320x568_align_and_record_no_scroll_visibility():
 
 if __name__ == "__main__":
     test_no_horizontal_overflow_scroll()
-    test_phone_320x568_align_and_record_no_scroll_visibility()
+    test_phone_320x568_capture_controls_remain_reachable()
     print("All overflow and 320x568 visibility tests PASSED.")

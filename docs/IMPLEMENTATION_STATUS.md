@@ -1,5 +1,15 @@
 # Integration verification status
 
+## Responsive interface update (Windows only, 2026-11-08)
+
+The v1.3.0 web interface and Android 0.3.0/code 3 are prepared locally. No Pi connection, deployment or live hardware benchmark was used for this update. The approved references are the existing E-Eye manuscript and UI brief. Recording remains five seconds per eye. Processing elapsed time now comes from job timestamps; the UI does not promise a fixed inference deadline or mark an unavailable model stage complete.
+
+The local browser workflow passes phone/tablet/laptop widths 320, 390, 768, 1024 and 1440, plus landscape, keyboard-sized views, reduced motion, consent gating, actual processing-stage rendering, disconnect/recheck, browser-cache restoration, retake and OD/OS routing. Receipt OCR/explicit confirmation/linkage and verified storage browser regressions pass. The actual uploaded receipt's recognition limitation is unchanged. Java archive verification passes. Shared CSS is 8,767 bytes gzipped; all first-party JS is 13,931 bytes gzipped, below the brief's 60 KB JS budget. These are asset sizes, not a Pi processing-speed benchmark.
+
+Android APK SHA-256: `41a64d299df56f4891ad369321d0d8bcb0bc9bb76f9ef248d7f8435522a47540`. It builds and its signature verifies using the retained testing key. No physical Android screen/insets/font-scale test is claimed. See `RESPONSIVE_UI_GUIDE.md` for the separate mock preview and device-test limits. Code review found interrupted timing and browser-cache restoration defects; both were fixed and covered by regression checks.
+
+Final full Python/browser test suite: **127 passed, 1 skipped** in 154.95 seconds. The skip is Windows symlink-creation privilege. The dedicated responsive, receipt and verified-storage browser scripts also pass. The separate local preview reports v1.3.0/mock mode, and its APK download matches the signed installer checksum. Older tests were updated for renamed processing stages, the existing explicit receipt-confirmation requirement and reachable scrolling controls on short phones; the five previously failing checks pass.
+
 ## Connected-device storage update (installed, 2026-11-08)
 
 Phone follow-up: the owner explicitly confirmed installation, connection and estimated-distance display, then reported missing or wrong receipt-reading values. The uploaded receipt is present on the Pi. Diagnostic reading of that photo, including upright rotation and alternate segmentation settings in a temporary local test, did not reliably recover its summary rows. Production recognition settings were left unchanged. Direct entry of the already printed summary remains available; no reference values were confirmed or changed during diagnosis. The full phone save/verification workflow remains unconfirmed.

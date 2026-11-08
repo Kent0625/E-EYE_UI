@@ -253,6 +253,8 @@ def test_research_mode_toggle_and_result_screen_behavior():
             # 3. Fill and submit ground truth
             page.fill("#gt-od-sphere", "-1.25")
             page.fill("#gt-od-cylinder", "-0.50")
+            assert page.locator('#btn-save-ground-truth').is_disabled()
+            page.locator('#gt-confirmed').check()
             page.click("#btn-save-ground-truth")
             page.wait_for_timeout(400)
 

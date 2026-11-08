@@ -95,7 +95,7 @@
 
       <!-- Action bar: Sticky on mobile above nav, static below meter on desktop -->
       <div class="sticky-action-bar" id="align-action-bar">
-        <button type="button" id="btn-record" class="btn btn-primary btn-block" disabled data-i18n="align.record">
+        <button type="button" id="btn-record" class="btn btn-primary btn-block" disabled data-i18n="align.record" aria-describedby="record-disabled-reason stability-text">
           <svg class="icon"><use href="#icon-camera"></use></svg>
           <span>Record 5 seconds</span>
         </button>
@@ -142,6 +142,15 @@
   let inRangeStartTime = null;
   let isRecording = false;
   let distEvtSource = null;
+  let lastDistance = null;
+  const distanceLabels = {
+    'align.noReading': 'No distance reading', 'align.tooClose': 'Move back',
+    'align.tooFar': 'Move closer', 'align.ok': 'Distance OK'
+  };
+  const distanceText = key => { const value = t(key); return value === key ? distanceLabels[key] : value; };
+  document.addEventListener('eeye:languagechange', () => {
+    if (lastDistance && !isRecording) renderDistance(lastDistance);
+  });
 
   function initDistanceStream() {
     if (distEvtSource) {
@@ -162,6 +171,7 @@
   }
 
   function renderDistance(data) {
+    lastDistance = data;
     if (data.valid && data.estimated) {
       distVal.textContent = Number(data.cm).toFixed(2);
       distBadge.className = "badge badge-warn";
@@ -176,11 +186,11 @@
     if (!data.valid || data.cm <= 0) {
       distVal.textContent = "--";
       distBadge.className = "badge badge-warn";
-      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${t("align.noReading")}</span>`;
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${distanceText("align.noReading")}</span>`;
       inRangeStartTime = null;
       btnRecord.disabled = true;
-      recordReason.textContent = t("align.noReading");
-      stabilityText.textContent = t("align.noReading");
+      recordReason.textContent = distanceText("align.noReading");
+      stabilityText.textContent = distanceText("align.noReading");
       return;
     }
 
@@ -194,22 +204,22 @@
 
     if (cm < 10.0) {
       distBadge.className = "badge badge-warn";
-      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${t("align.tooClose")}</span>`;
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${distanceText("align.tooClose")}</span>`;
       inRangeStartTime = null;
       btnRecord.disabled = true;
-      recordReason.textContent = t("align.tooClose");
+      recordReason.textContent = distanceText("align.tooClose");
       stabilityText.textContent = "Move back to 10–15 cm";
     } else if (cm > 15.0) {
       distBadge.className = "badge badge-warn";
-      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${t("align.tooFar")}</span>`;
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-alert-triangle"></use></svg><span>${distanceText("align.tooFar")}</span>`;
       inRangeStartTime = null;
       btnRecord.disabled = true;
-      recordReason.textContent = t("align.tooFar");
+      recordReason.textContent = distanceText("align.tooFar");
       stabilityText.textContent = "Move closer to 10–15 cm";
     } else {
       // In range: 10.0 to 15.0 cm
       distBadge.className = "badge badge-ok";
-      distBadge.innerHTML = `<svg class="icon"><use href="#icon-check"></use></svg><span>${t("align.ok")}</span>`;
+      distBadge.innerHTML = `<svg class="icon"><use href="#icon-check"></use></svg><span>${distanceText("align.ok")}</span>`;
       
       const now = Date.now();
       if (!inRangeStartTime) {

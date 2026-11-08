@@ -586,9 +586,6 @@ body {
     width: 24px;
     height: 24px;
   }
-  .flow-screen .brand-tag {
-    display: none;
-  }
   .flow-screen .page-content {
     padding: 8px 12px;
     padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
@@ -1140,78 +1137,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-/* Compact Viewport Optimization for 320x568 */
-@media (max-width: 400px) and (max-height: 600px) {
-  .flow-screen .app-header {
-    min-height: 56px !important;
-    height: 56px !important;
-    padding: 0 8px !important;
-  }
-  .flow-screen .page-content {
-    padding: 4px 8px 130px 8px !important;
-  }
-  .align-meta-bar {
-    margin-bottom: 4px !important;
-  }
-  .align-eye-title {
-    font-size: 15px !important;
-  }
-  .align-preview-card {
-    padding: 4px !important;
-    min-height: 0 !important;
-    margin-bottom: 4px !important;
-  }
-  #preview-wrapper {
-    max-height: 140px !important;
-  }
-  .fixation-hint {
-    font-size: 11px !important;
-    margin-top: 2px !important;
-  }
-  .align-meter-card {
-    padding: 6px 10px !important;
-    margin-bottom: 4px !important;
-  }
-  .align-meter-card .card-header {
-    margin-bottom: 2px !important;
-  }
-  .card-title {
-    font-size: 13px !important;
-  }
-  .distance-val-display {
-    font-size: 28px !important;
-    line-height: 1.1 !important;
-    margin: 2px 0 !important;
-  }
-  .distance-bar-track {
-    height: 8px !important;
-  }
-  .gauge-pointer {
-    width: 16px !important;
-    height: 16px !important;
-    top: -4px !important;
-  }
-  .distance-scale {
-    font-size: 10px !important;
-    margin-top: 2px !important;
-  }
-  .stability-wrapper {
-    font-size: 11px !important;
-    margin: 2px 0 4px !important;
-  }
-  .action-disabled-reason {
-    display: none !important;
-  }
-  .sticky-action-bar {
-    padding: 6px 12px !important;
-  }
-  .sticky-action-bar .btn {
-    min-height: 48px !important;
-    padding: 8px 12px !important;
-    font-size: 15px !important;
-  }
 }
 
 /* Shortened Banner and Compact Eye Card on 320 px (Item 4c) */
@@ -2078,12 +2003,12 @@ body {
 }
 
 .processing-step {
-  border-left: 4px solid var(--border);
+  border: 1px solid var(--border);
   transition: border-color 0.2s ease;
 }
 
 .processing-step.complete {
-  border-left-color: var(--teal-600);
+  border-color: var(--teal-600);
 }
 
 .step-status-icon {

@@ -1,5 +1,7 @@
 # E-Eye Photorefractor Operator Web Interface
 
+To test the responsive interface without a Pi, run `scripts/start-ui-preview.ps1` and open `http://127.0.0.1:5080`. This uses a separate, visibly labelled demo database. See [the preview and Android testing guide](docs/RESPONSIVE_UI_GUIDE.md). Real camera capture and deployment still require the Pi.
+
 An offline-first, mobile-responsive operator web interface for the E-Eye portable eccentric photorefractor, designed for rapid community vision screening in rural health units (RHUs) and barangay health stations in the Philippines.
 
 ---

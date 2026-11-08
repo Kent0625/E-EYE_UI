@@ -40,6 +40,8 @@ public final class MainActivity extends Activity {
     private WebView web;
     private EditText address;
     private TextView status;
+    private LinearLayout connectionPanel;
+    private Button connectionToggle;
     private Uri origin, cameraUri;
     private ValueCallback<Uri[]> fileCallback;
     private String downloadUrl;
@@ -57,21 +59,30 @@ public final class MainActivity extends Activity {
             view.setPadding(dp(12), insets.getSystemWindowInsetTop()+dp(8), dp(12), insets.getSystemWindowInsetBottom());
             return insets;
         });
+        LinearLayout toolbar = new LinearLayout(this);
+        connectionToggle = addButton(toolbar, "Connection", view -> {
+            boolean expand = connectionPanel.getVisibility() != View.VISIBLE;
+            connectionPanel.setVisibility(expand ? View.VISIBLE : View.GONE);
+            connectionToggle.setText(expand ? "Hide connection" : "Connection");
+        });
+        addButton(toolbar, "Open saved files", view -> showSavedFiles());
+        root.addView(toolbar);
+        connectionPanel = new LinearLayout(this);
+        connectionPanel.setOrientation(LinearLayout.VERTICAL);
+        root.addView(connectionPanel);
         address = new EditText(this);
         address.setSingleLine(true);
-        address.setHint("Pi address");
+        address.setHint("Device or laptop preview address");
+        address.setMinHeight(dp(48));
         address.setContentDescription("Raspberry Pi address");
         address.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         address.setText(getPreferences(0).getString("address", "http://192.168.137.106:5000"));
-        root.addView(address);
+        connectionPanel.addView(address);
         LinearLayout controls = new LinearLayout(this);
         addButton(controls, "Connect", view -> connect());
         addButton(controls, "Reload", view -> { if (origin != null) web.reload(); });
         addButton(controls, "Open Wi-Fi", view -> startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS)));
-        root.addView(controls);
-        LinearLayout files = new LinearLayout(this);
-        addButton(files, "Open saved files", view -> showSavedFiles());
-        root.addView(files);
+        connectionPanel.addView(controls);
         status = new TextView(this);
         status.setText("Join the same hotspot as the Pi, then connect.");
         status.setPadding(0, dp(4), 0, dp(8));
@@ -99,9 +110,15 @@ public final class MainActivity extends Activity {
     }
 
     private int dp(int pixels) { return Math.round(pixels * getResources().getDisplayMetrics().density); }
-    private void addButton(LinearLayout row, String text, View.OnClickListener click) {
+    private Button addButton(LinearLayout row, String text, View.OnClickListener click) {
         Button button = new Button(this); button.setText(text); button.setOnClickListener(click);
-        row.addView(button, new LinearLayout.LayoutParams(0, dp(48), 1));
+        button.setAllCaps(false);
+        button.setMinHeight(dp(48));
+        button.setTextSize(14);
+        LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(0, -2, 1);
+        if(row.getChildCount()>0) layout.setMarginStart(dp(8));
+        row.addView(button, layout);
+        return button;
     }
     private void showStatus(String text) { status.setText(text); }
     private boolean localAddress(Uri uri) {
@@ -152,10 +169,14 @@ public final class MainActivity extends Activity {
                 return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",null,new ByteArrayInputStream(new byte[0]));
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) { loadFailed=true; showStatus("Pi unavailable. Check its power and hotspot connection, then reload."); }
+                if (request.isForMainFrame()) { loadFailed=true; connectionPanel.setVisibility(View.VISIBLE); connectionToggle.setText("Hide connection"); showStatus("Device unavailable. Check its address and hotspot connection, then reload."); }
             }
             @Override public void onPageFinished(WebView view, String url) {
-                if (!loadFailed && permitted(Uri.parse(url)) && view.getProgress()==100) showStatus("Pi interface: "+origin.getHost());
+                if (!loadFailed && permitted(Uri.parse(url)) && view.getProgress()==100) {
+                    showStatus("Connected: "+origin.getHost());
+                    connectionPanel.setVisibility(View.GONE);
+                    connectionToggle.setText("Connection");
+                }
             }
         });
         web.setWebChromeClient(new WebChromeClient() {

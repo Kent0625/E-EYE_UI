@@ -1,132 +1,41 @@
 {% extends "base.html" %}
-
 {% block body_class %}flow-screen{% endblock %}
-
 {% block content %}
-<div class="processing-container">
+<div class="processing-container" id="processing-session" data-session-id="{{ session.id if session else 's_mock_refer' }}">
   <div class="card processing-card">
-    <!-- Normal Processing Pipeline -->
+    <div class="processing-context"><span>{{ session.participant_code if session else '' }}</span><span id="processing-eye"></span></div>
     <div id="processing-view">
-      <div class="processing-spinner-wrapper">
-        <svg class="icon spinner-icon"><use href="#icon-refresh-cw"></use></svg>
-      </div>
-
-      <h2 class="processing-title" data-i18n="processing.title">
-        Processing
-      </h2>
-
-      <!-- Deterministic Step Checklist -->
-      <div class="processing-steps">
-        <div id="step-extracting" class="status-item processing-step">
-          <span data-i18n="processing.step.extracting">Extracting frames</span>
-          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
+      <div class="processing-spinner-wrapper" aria-hidden="true"><svg class="icon spinner-icon"><use href="#icon-refresh-cw"></use></svg></div>
+      <h2 class="processing-title" data-i18n="processing.title">{{ t('processing.title') }}</h2>
+      <p id="processing-message" class="processing-message" role="status" data-i18n="processing.connecting">{{ t('processing.connecting') }}</p>
+      <p class="processing-timing numeric"><span data-i18n="processing.elapsed">{{ t('processing.elapsed') }}</span>: <span id="processing-elapsed">—</span></p>
+      <p class="form-hint" data-i18n="processing.timingHint">{{ t('processing.timingHint') }}</p>
+      <div class="processing-steps" aria-label="{{ t('processing.stages') }}">
+        {% for phase,key in [('saving','processing.saving'),('quality','processing.step.quality'),('prediction','processing.step.refraction')] %}
+        <div class="status-item processing-step" id="phase-{{ phase }}" data-state="waiting">
+          <span data-i18n="{{ key }}">{{ t(key) }}</span><span class="phase-state">{{ t('processing.state.waiting') }}</span>
         </div>
-
-        <div id="step-quality" class="status-item processing-step">
-          <span data-i18n="processing.step.quality">Checking frame quality</span>
-          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
-        </div>
-
-        <div id="step-features" class="status-item processing-step">
-          <span data-i18n="processing.step.features">Computing pupil crescent features</span>
-          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
-        </div>
-
-        <div id="step-refraction" class="status-item processing-step">
-          <span data-i18n="processing.step.refraction">Estimating refraction</span>
-          <span class="step-status"><svg class="icon step-status-icon"><use href="#icon-clock"></use></svg></span>
-        </div>
+        {% endfor %}
       </div>
     </div>
-
-    <!-- Retake Fallback State (< 10 valid frames) -->
-    <div id="retake-view" class="retake-view hidden">
-      <div class="retake-header">
-        <svg class="icon icon-lg"><use href="#icon-alert-triangle"></use></svg>
-        <h2 class="retake-title" data-i18n="retake.title">Not enough clear frames. Retake this eye.</h2>
+    <div id="processing-recovery" class="processing-recovery" hidden>
+      <p id="processing-recovery-message" role="alert"></p>
+      <button type="button" id="processing-retry" class="btn btn-secondary" data-i18n="processing.retry">{{ t('processing.retry') }}</button>
+    </div>
+    <div id="retake-view" class="retake-view" hidden>
+      <h2 id="retake-title" class="retake-title" data-quality-title="{{ t('retake.title') }}" data-i18n="retake.reviewTitle">{{ t('retake.reviewTitle') }}</h2>
+      <p id="retake-message" class="processing-message"></p>
+      <p id="retake-quality-hint" class="form-hint" data-i18n="retake.reasons" hidden>{{ t('retake.reasons') }}</p>
+      <div class="processing-actions">
+        <a id="btn-retake" class="btn btn-primary" data-i18n="retake.btn">{{ t('retake.btn') }}</a>
+        <a id="btn-skip-eye" class="btn btn-secondary" data-i18n="retake.skip">{{ t('retake.skip') }}</a>
       </div>
-
-      <div class="offline-banner">
-        <p data-i18n="retake.reasons">
-          Likely causes: blinking during capture, head movement, or distance drifted outside 10.0 to 15.0 cm.
-        </p>
-      </div>
-
-      <div class="sticky-action-bar retake-actions">
-        <button type="button" id="btn-retake" class="btn btn-primary btn-flex" data-i18n="retake.btn">
-          Retake this eye
-        </button>
-        <button type="button" id="btn-skip-eye" class="btn btn-secondary btn-flex" data-i18n="retake.skip">
-          Skip this eye
-        </button>
-      </div>
+    </div>
+    <div class="processing-links">
+      <a id="processing-record-link" href="/screen/{{ session.id if session else 's_mock_refer' }}/result" data-i18n="processing.viewRecord">{{ t('processing.viewRecord') }}</a>
+      <a href="/history" data-i18n="nav.history">{{ t('nav.history') }}</a>
     </div>
   </div>
 </div>
 {% endblock %}
-
-{% block scripts %}
-<script type="module">
-  const urlParams = new URLSearchParams(window.location.search);
-  const currentEye = urlParams.get("eye") || "OD";
-  const sessionId = "{{ session.id if session else 's_mock_refer' }}";
-
-  const stepElements = {
-    extracting: document.getElementById("step-extracting"),
-    quality_check: document.getElementById("step-quality"),
-    feature_calc: document.getElementById("step-features"),
-    inference: document.getElementById("step-refraction")
-  };
-
-  const evtSource = new EventSource(`/api/sessions/${sessionId}/events?eye=${encodeURIComponent(currentEye)}`);
-  
-  evtSource.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      if (data.step && stepElements[data.step]) {
-        const el = stepElements[data.step];
-        el.classList.add("complete");
-        const statusSpan = el.querySelector(".step-status");
-        if (statusSpan) {
-          statusSpan.innerHTML = `<svg class="icon step-status-icon-complete"><use href="#icon-check"></use></svg>`;
-        }
-      }
-      
-      if (data.done) {
-        evtSource.close();
-        // Check if we need retake (simulate only if session is s_mock_retake and eye is OS)
-        if (data.status === 'retake_needed' || (sessionId === "s_mock_retake" && currentEye === "OS")) {
-          const pView = document.getElementById("processing-view");
-          const rView = document.getElementById("retake-view");
-          if (pView) pView.classList.add("hidden");
-          if (rView) rView.classList.remove("hidden");
-          return;
-        }
-
-        // Normal path: if OD done, proceed to OS; if OS done, proceed to result
-        if (currentEye === "OD") {
-          window.location.href = `/screen/${sessionId}/OS`;
-        } else {
-          window.location.href = `/screen/${sessionId}/result`;
-        }
-      }
-    } catch (err) {
-      console.error("SSE parse error:", err);
-    }
-  };
-
-  evtSource.onerror = () => {
-    evtSource.close();
-    document.querySelector('.processing-title').textContent = 'Connection lost. Reopen this session from History to check the saved capture.';
-    document.querySelector('.processing-spinner-wrapper').classList.add('hidden');
-  };
-
-  document.getElementById("btn-retake")?.addEventListener("click", () => {
-    window.location.href = `/screen/${sessionId}/${currentEye}`;
-  });
-
-  document.getElementById("btn-skip-eye")?.addEventListener("click", () => {
-    window.location.href = `/screen/${sessionId}/result`;
-  });
-</script>
-{% endblock %}
+{% block scripts %}<script type="module" src="{{ url_for('static', filename='js/processing.js') }}"></script>{% endblock %}

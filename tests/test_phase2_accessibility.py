@@ -120,7 +120,7 @@ def test_phase2_screens_accessibility():
     screens = [
         {"name": "New Screening", "path": "/screen/new", "selector": "#btn-continue"},
         {"name": "Align and Record OD", "path": "/screen/s_mock_refer/OD", "selector": "#btn-record"},
-        {"name": "Processing Screen", "path": "/screen/s_mock_refer/processing?eye=OD", "selector": "#step-extracting"}
+            {"name": "Processing Screen", "path": "/screen/s_mock_refer/processing?eye=OD", "selector": "#phase-saving"}
     ]
 
     try:
